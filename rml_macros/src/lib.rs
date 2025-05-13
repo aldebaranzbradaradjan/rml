@@ -173,7 +173,6 @@ impl Parse for RmlNode {
 
 impl RmlNode {
     fn generate(&self) -> (proc_macro2::TokenStream, String) {
-
         // use or generate id if not present
         let id = self
             .properties
@@ -191,7 +190,7 @@ impl RmlNode {
             .map(|(k, v)| {
                 
                 let value = value_to_abstract_value(v);
-                println!("value: {:?}", value);
+                //println!("value: {:?}", value);
                 quote! {
                     let prop_id = engine.add_property(Property::new( #value ));
                     engine.add_property_to_node(#temp_node, stringify!(#k).to_string() , prop_id);
