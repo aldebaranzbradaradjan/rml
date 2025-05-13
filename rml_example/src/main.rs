@@ -25,16 +25,23 @@ async fn main() {
                 height: 10.0
                 color: "rgba(1.0, 0.0, 0.0, 1.0)"
 
-                // on_x_change: {
-                //     let val = engine.get_number_property_of_node("top_bar", "y", 0.0);
-                //     engine.set_property_of_node("bottom_bar", "y", AbstractValue::Number(val + 20.0));
-                // }
+                on_x_change: {
+                    let top_bar_x = engine.get_number_property_of_node("top_bar", "x", 0.0);
+                    let top_bar_width = engine.get_number_property_of_node("top_bar", "width", 0.0);
+                    let bottom_bar_width = engine.get_number_property_of_node("bottom_bar", "width", 0.0);
+                    engine.set_property_of_node("bottom_bar", "x", AbstractValue::Number(top_bar_x + (top_bar_width / 2.0) - (bottom_bar_width / 2.0)));
+                }
+                
+                on_y_change: {
+                    let val = engine.get_number_property_of_node("top_bar", "y", 0.0);
+                    engine.set_property_of_node("bottom_bar", "y", AbstractValue::Number(val + 20.0));
+                }
             }
 
             Rectangle {
                 id: bottom_bar
                 x: 0.0
-                y: 300.0
+                y: 20.0
                 width: 25
                 height: 25
                 color: "rgba(1.0, 0.0, 1.0, 1.0)"
@@ -42,14 +49,17 @@ async fn main() {
         }
     );
 
-    {
-        // Demonstration of callbacks and bindings
-        let cb_id = engine.add_callback(|engine| {
-            let val = engine.get_number_property_of_node("top_bar", "x", 0.0);
-            engine.set_property_of_node("bottom_bar", "x", AbstractValue::Number(val));
-        });
-        engine.bind_node_property_to_callback( "top_bar", "x", cb_id);
-    }
+
+    // {
+    //     // Demonstration of callbacks and bindings
+    //     let cb_id = engine.add_callback(|engine| {
+    //         let top_bar_x = engine.get_number_property_of_node("top_bar", "x", 0.0);
+    //         let top_bar_width = engine.get_number_property_of_node("top_bar", "x", 0.0);
+    //         engine.set_property_of_node("bottom_bar", "x", AbstractValue::Number(top_bar_x + (top_bar_width / 2.0)));
+    //     });
+
+    //     engine.bind_node_property_to_callback( "top_bar", "x", cb_id);
+    // }
 
     println!("node from macro:\n {:#?}", engine.get_arena());
 

@@ -25,6 +25,7 @@ pub fn rml(input: TokenStream) -> TokenStream {
 enum Value {
     Lit(Lit),
     Ident(Ident),
+    Block(syn::Block),
 }
 
 fn lit_to_string(literal: &Lit) -> Option<String> {
@@ -88,6 +89,10 @@ fn value_to_abstract_value(value: &Value) -> AbstractValue {
             _ => AbstractValue::Null, // Handle unexpected or unsupported literal types
         },
         Value::Ident(ident) => AbstractValue::String(ident.to_string()),
+        Value::Block(_block) => {
+            // Handle block values if needed
+            AbstractValue::Null // Placeholder for block handling
+        }
     }
 }
 
@@ -96,6 +101,7 @@ impl ToString for Value {
         match self {
             Value::Lit(literal) => lit_to_string(literal).unwrap_or_default(),
             Value::Ident(ident) => ident.to_string(),
+            Value::Block(_) => "<block>".to_string(),
         }
     }
 }
@@ -144,14 +150,18 @@ impl Parse for RmlNode {
                 content.parse::<Token![:]>()?;
 
                 let value: Value;
+
                 if content.peek(Lit) {
                     value = Value::Lit(content.parse()?);
                 } else if content.peek(Ident) {
                     value = Value::Ident(content.parse()?);
+                } else if content.peek(syn::token::Brace) {
+                    let block: syn::Block = content.parse()?;
+                    value = Value::Block(block);
                 } else {
-                    return Err(content.error("Expected literal or identifier"));
+                    return Err(content.error("Expected literal, identifier or block"));
                 }
-                //let value: Lit = content.parse()?;
+            
                 content.parse::<Token![,]>().ok(); // optional virgule
                 properties.push((key, value));
             } else if content.peek(Ident) {
@@ -188,15 +198,38 @@ impl RmlNode {
             .properties
             .iter()
             .map(|(k, v)| {
-                
-                let value = value_to_abstract_value(v);
-                //println!("value: {:?}", value);
-                quote! {
-                    let prop_id = engine.add_property(Property::new( #value ));
-                    engine.add_property_to_node(#temp_node, stringify!(#k).to_string() , prop_id);
-                    //(stringify!(#k).to_string(), #value)
-                    //println!("value");
+
+                let k_string = k.to_string();
+
+                if k_string.starts_with("on_") && k_string.ends_with("_change") {
+                    let observed = k_string.trim_start_matches("on_").trim_end_matches("_change");
+                    if let Value::Block(block) = v {
+                        quote! {
+                            let cb_id = engine.add_callback( |engine| #block);
+                            engine.bind_node_property_to_callback( #id, #observed, cb_id);
+                        }
+                    } else {
+                        quote! {} // fallback ou erreur
+                    }
+                } else {
+                    let value = value_to_abstract_value(v);
+                    quote! {
+                        let prop_id = engine.add_property(Property::new( #value ));
+                        engine.add_property_to_node(#temp_node, stringify!(#k).to_string() , prop_id);
+                    }
                 }
+
+
+
+                
+                // let value = value_to_abstract_value(v);
+                // //println!("value: {:?}", value);
+                // quote! {
+                //     let prop_id = engine.add_property(Property::new( #value ));
+                //     engine.add_property_to_node(#temp_node, stringify!(#k).to_string() , prop_id);
+                //     //(stringify!(#k).to_string(), #value)
+                //     //println!("value");
+                // }
             })
             .collect();
 
