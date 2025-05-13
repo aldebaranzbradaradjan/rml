@@ -1,0 +1,9 @@
+[package]
+name = "rml_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+quote = "1.0"
+proc-macro2 = "1.0"
+macroquad = { version = "0.4.14" }
