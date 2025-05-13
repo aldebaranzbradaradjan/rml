@@ -218,18 +218,6 @@ impl RmlNode {
                         engine.add_property_to_node(#temp_node, stringify!(#k).to_string() , prop_id);
                     }
                 }
-
-
-
-                
-                // let value = value_to_abstract_value(v);
-                // //println!("value: {:?}", value);
-                // quote! {
-                //     let prop_id = engine.add_property(Property::new( #value ));
-                //     engine.add_property_to_node(#temp_node, stringify!(#k).to_string() , prop_id);
-                //     //(stringify!(#k).to_string(), #value)
-                //     //println!("value");
-                // }
             })
             .collect();
 
@@ -269,6 +257,8 @@ impl RmlNode {
                 engine.add_child(#temp_node, #child_temp_nodes);
             )*
         };
+
+        
 
         (node_code, id)
     }

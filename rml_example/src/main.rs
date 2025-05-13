@@ -3,14 +3,12 @@
 use macroquad::prelude::*;
 
 use std::collections::HashMap;
-use rml_core::{RmlEngine, Property, AbstractValue};
+use rml_core::{ RmlEngine, Property, AbstractValue, get_number, set_number };
 use rml_macros::rml;
 
 #[macroquad::main("Simple RML Example")]
 async fn main() {
-
-    // let test = Property::new(AbstractValue::String("test".to_string()) );
-
+    // Initialize the RML engine
     let mut engine = rml!(
         Node {
             id: root
@@ -26,10 +24,10 @@ async fn main() {
                 color: "rgba(1.0, 0.0, 0.0, 1.0)"
 
                 on_x_change: {
-                    let top_bar_x = engine.get_number_property_of_node("top_bar", "x", 0.0);
-                    let top_bar_width = engine.get_number_property_of_node("top_bar", "width", 0.0);
-                    let bottom_bar_width = engine.get_number_property_of_node("bottom_bar", "width", 0.0);
-                    engine.set_property_of_node("bottom_bar", "x", AbstractValue::Number(top_bar_x + (top_bar_width / 2.0) - (bottom_bar_width / 2.0)));
+                    let top_bar_x = get_number!(engine, top_bar, x);
+                    let top_bar_width = get_number!(engine, top_bar, width);
+                    let bottom_bar_width = get_number!(engine, bottom_bar, width);
+                    set_number!(engine, bottom_bar, x, top_bar_x + (top_bar_width / 2.0) - (bottom_bar_width / 2.0));
                 }
                 
                 on_y_change: {
@@ -49,15 +47,13 @@ async fn main() {
         }
     );
 
-
     // {
-    //     // Demonstration of callbacks and bindings
+    //     // Demonstration of callbacks and bindings directly in rust code
     //     let cb_id = engine.add_callback(|engine| {
     //         let top_bar_x = engine.get_number_property_of_node("top_bar", "x", 0.0);
     //         let top_bar_width = engine.get_number_property_of_node("top_bar", "x", 0.0);
     //         engine.set_property_of_node("bottom_bar", "x", AbstractValue::Number(top_bar_x + (top_bar_width / 2.0)));
     //     });
-
     //     engine.bind_node_property_to_callback( "top_bar", "x", cb_id);
     // }
 

@@ -6,10 +6,8 @@ pub mod draw;
 pub use arena::{ArenaNode, ArenaTree, NodeId, PropertyMap, PropertyName};
 pub use properties::{AbstractValue, Property};
 
-
 use std::{collections::{HashMap}, sync::{Arc}};
 use macroquad::color::Color;
-
 
 pub type CallbackId = usize;
 pub type PropertyId = usize;
@@ -17,6 +15,61 @@ pub type BindingId = usize;
 //pub type Closure = Box<dyn Fn(&mut RmlEngine) + Send + Sync>;
 type Callback = Arc<dyn Fn(&mut RmlEngine) + Send + Sync>;
 
+#[macro_export]
+macro_rules! get_number {
+    ($engine:expr, $node:ident, $prop:ident) => {{
+        $engine.get_number_property_of_node(stringify!($node), stringify!($prop), 0.0)
+    }};
+}
+
+#[macro_export]
+macro_rules! set_number {
+    ($engine:expr, $node:ident, $prop:ident, $value:expr) => {{
+        $engine.set_property_of_node(stringify!($node), stringify!($prop), AbstractValue::Number($value))
+    }};
+}
+
+#[macro_export]
+macro_rules! get_string {
+    ($engine:expr, $node:ident, $prop:ident) => {{
+        $engine.get_string_property_of_node(stringify!($node), stringify!($prop), "".to_string())
+    }};
+}
+
+#[macro_export]
+macro_rules! set_string {
+    ($engine:expr, $node:ident, $prop:ident, $value:expr) => {{
+        $engine.set_property_of_node(stringify!($node), stringify!($prop), AbstractValue::String($value))
+    }};
+}
+
+#[macro_export]
+macro_rules! get_bool {
+    ($engine:expr, $node:ident, $prop:ident) => {{
+        $engine.get_bool_property_of_node(stringify!($node), stringify!($prop), false)
+    }};
+}
+
+#[macro_export]
+macro_rules! set_bool {
+    ($engine:expr, $node:ident, $prop:ident, $value:expr) => {{
+        $engine.set_property_of_node(stringify!($node), stringify!($prop), AbstractValue::Bool($value))
+    }};
+}
+
+#[macro_export]
+macro_rules! get_color {
+    ($engine:expr, $node:ident, $prop:ident) => {{
+        $engine.get_color_property_of_node(stringify!($node), stringify!($prop), Color::from_rgba(0, 0, 0, 0))
+    }};
+}
+
+#[macro_export]
+macro_rules! set_color {
+    ($engine:expr, $node:ident, $prop:ident, $value:expr) => {{
+        $engine.set_property_of_node(stringify!($node), stringify!($prop), AbstractValue::Color($value))
+    }};
+}
 
 pub struct RmlEngine {
     arena: ArenaTree,
