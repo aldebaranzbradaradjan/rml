@@ -3,7 +3,7 @@ pub mod properties;
 pub mod arena;
 pub mod draw;
 
-pub use arena::{ArenaNode, ArenaTree, NodeId, PropertyMap, PropertyName};
+pub use arena::{ArenaNode, ArenaTree, NodeId, PropertyMap, PropertyName, ItemTypeEnum};
 pub use properties::{AbstractValue, Property};
 
 use std::{collections::{HashMap}, sync::{Arc}};
@@ -100,8 +100,8 @@ impl RmlEngine {
     }
 
     // arena tree methods
-    pub fn add_node(&mut self, id: String, properties: PropertyMap) -> Option<NodeId> {
-        self.arena.add_node(id, properties)
+    pub fn add_node(&mut self, id: String, node_type: ItemTypeEnum, properties: PropertyMap) -> Option<NodeId> {
+        self.arena.add_node(node_type, id, properties)
     }
     pub fn add_child(&mut self, parent_id: NodeId, child_id: NodeId) {
         self.arena.add_child(parent_id, child_id);

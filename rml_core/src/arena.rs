@@ -13,6 +13,13 @@ pub struct ArenaTree {
     pub id_to_node_id: HashMap<ArenaNodeId, NodeId>,
 }
 
+#[derive(PartialEq, Debug)]
+pub enum ItemTypeEnum {
+    Node,
+    Rectangle,
+    Text,
+}
+
 pub type ArenaNodeId = String;
 pub type PropertyName = String;
 pub type PropertyMap = HashMap<PropertyName, PropertyId>;
@@ -20,6 +27,7 @@ pub type PropertyMap = HashMap<PropertyName, PropertyId>;
 #[derive(Debug)]
 pub struct ArenaNode {
     pub id: ArenaNodeId,
+    pub node_type: ItemTypeEnum,
     pub properties: PropertyMap,
     pub parent: Option<NodeId>,
     pub children: HashSet<NodeId>,
@@ -29,6 +37,7 @@ impl ArenaNode {
     pub fn new(id: ArenaNodeId) -> Self {
         Self {
             id,
+            node_type: ItemTypeEnum::Node,
             properties: PropertyMap::new(),
             parent: None,
             children: HashSet::new(),
@@ -44,6 +53,17 @@ impl ArenaNode {
 
     pub fn get_property(&self, name: &str) -> Option<usize> {
         self.properties.get(name).copied()
+    }
+}
+
+impl ToTokens for ItemTypeEnum {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let tokenized = match self {
+            ItemTypeEnum::Node => quote! { ItemTypeEnum::Node },
+            ItemTypeEnum::Rectangle => quote! { ItemTypeEnum::Rectangle },
+            ItemTypeEnum::Text => quote! { ItemTypeEnum::Text },
+        };
+        tokenized.to_tokens(tokens);
     }
 }
 
@@ -82,13 +102,14 @@ impl ArenaTree {
     }
 
     /// Add a node to the tree and return its `NodeId`
-    pub fn add_node(&mut self, id: ArenaNodeId, properties: PropertyMap) -> Option<NodeId> {
+    pub fn add_node(&mut self, node_type: ItemTypeEnum, id: ArenaNodeId, properties: PropertyMap) -> Option<NodeId> {
         if self.id_to_node_id.contains_key(&id) {
             return None;
         }
         let node_id = self.nodes.len();
         self.nodes.push(ArenaNode {
             id: id.clone(),
+            node_type,
             properties,
             parent: None,
             children: HashSet::new(),

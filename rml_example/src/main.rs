@@ -3,11 +3,12 @@
 use macroquad::prelude::*;
 
 use std::collections::HashMap;
-use rml_core::{ RmlEngine, Property, AbstractValue, get_number, set_number };
+use rml_core::{ RmlEngine, Property, AbstractValue, get_number, set_number, ItemTypeEnum};
 use rml_macros::rml;
 
 #[macroquad::main("Simple RML Example")]
 async fn main() {
+
     // Initialize the RML engine
     let mut engine = rml!(
         Node {
@@ -22,17 +23,30 @@ async fn main() {
                 width: 300
                 height: 10.0
                 color: "rgba(1.0, 0.0, 0.0, 1.0)"
+                
+                fn add(a: f32, b: f32) -> f32 {
+                    a + b
+                }
 
                 on_x_change: {
                     let top_bar_x = get_number!(engine, top_bar, x);
                     let top_bar_width = get_number!(engine, top_bar, width);
                     let bottom_bar_width = get_number!(engine, bottom_bar, width);
-                    set_number!(engine, bottom_bar, x, top_bar_x + (top_bar_width / 2.0) - (bottom_bar_width / 2.0));
+                    set_number!(engine, bottom_bar, x, add(top_bar_x, (top_bar_width / 2.0) - (bottom_bar_width / 2.0)));
                 }
                 
                 on_y_change: {
                     let val = engine.get_number_property_of_node("top_bar", "y", 0.0);
                     engine.set_property_of_node("bottom_bar", "y", AbstractValue::Number(val + 20.0));
+                }
+
+                Rectangle {
+                    id: inner_rect
+                    x: 20.0
+                    y: 20.0
+                    width: 25
+                    height: 25
+                    color: "rgba(0.3, 0.5, 0.3, 1.0)"
                 }
             }
 
@@ -46,6 +60,8 @@ async fn main() {
             }
         }
     );
+
+    
 
     // {
     //     // Demonstration of callbacks and bindings directly in rust code
