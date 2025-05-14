@@ -24,15 +24,16 @@ async fn main() {
                 height: 10.0
                 color: "rgba(1.0, 0.0, 0.0, 1.0)"
                 
-                fn add(a: f32, b: f32) -> f32 {
-                    a + b
-                }
-
-                on_x_change: {
+                fn compute_bottom_bar_x(engine: &mut RmlEngine) {
                     let top_bar_x = get_number!(engine, top_bar, x);
                     let top_bar_width = get_number!(engine, top_bar, width);
                     let bottom_bar_width = get_number!(engine, bottom_bar, width);
-                    set_number!(engine, bottom_bar, x, add(top_bar_x, (top_bar_width / 2.0) - (bottom_bar_width / 2.0)));
+                    let bottom_bar_x = top_bar_x + top_bar_width / 2.0 - bottom_bar_width / 2.0;
+                    set_number!(engine, bottom_bar, x, bottom_bar_x);
+                }
+
+                on_x_change: {
+                    compute_bottom_bar_x(engine);
                 }
                 
                 on_y_change: {
@@ -60,8 +61,6 @@ async fn main() {
             }
         }
     );
-
-    
 
     // {
     //     // Demonstration of callbacks and bindings directly in rust code
