@@ -113,6 +113,41 @@ impl ToString for Value {
     }
 }
 
+fn inject_engine_in_block(mut block: syn::Block) -> syn::Block {
+    use syn::{Expr, ExprCall, ExprPath, Stmt, Token};
+
+    block.stmts = block
+        .stmts
+        .into_iter()
+        .map(|stmt| match stmt {
+            Stmt::Expr(expr, semi_opt) => {
+                let expr = match expr {
+                    Expr::Call(mut call) => {
+                        // Si ce n’est pas déjà "engine" en premier argument
+                        let has_engine = call.args.iter().any(|arg| {
+                            matches!(arg, Expr::Path(p) if p.path.is_ident("engine"))
+                        });
+
+                        if !has_engine {
+                            let engine_expr: Expr = syn::parse_quote!(engine);
+                            call.args.insert(0, engine_expr);
+                        }
+
+                        Expr::Call(call)
+                    }
+                    other => other,
+                };
+                Stmt::Expr(expr, semi_opt)
+            }
+            other => other,
+        })
+        .collect();
+
+    block
+}
+
+
+
 /// Struct to parse a Node
 struct RmlNode {
     _ident: Ident, // unused directly, but allow to parse the node name and syntax
@@ -226,34 +261,6 @@ impl RmlNode {
         // Generate a temporary variable for the node
         let temp_node = format_ident!("temp_node_{}", id);
 
-        // convert properties in token stream
-        let properties: Vec<proc_macro2::TokenStream> = self
-            .properties
-            .iter()
-            .map(|(k, v)| {
-
-                let k_string = k.to_string();
-
-                if k_string.starts_with("on_") && k_string.ends_with("_change") {
-                    let observed = k_string.trim_start_matches("on_").trim_end_matches("_change");
-                    if let Value::Block(block) = v {
-                        quote! {
-                            let cb_id = engine.add_callback( |engine| #block);
-                            engine.bind_node_property_to_callback( #id, #observed, cb_id);
-                        }
-                    } else {
-                        quote! {} // fallback ou erreur
-                    }
-                } else {
-                    let value = value_to_abstract_value(v);
-                    quote! {
-                        let prop_id = engine.add_property(Property::new( #value ));
-                        engine.add_property_to_node(#temp_node, stringify!(#k).to_string() , prop_id);
-                    }
-                }
-            })
-            .collect();
-
         // generate code for each child
         let child_results: Vec<(String, proc_macro2::TokenStream, proc_macro2::TokenStream)> = self
             .children
@@ -287,19 +294,62 @@ impl RmlNode {
             .functions
             .iter()
             .map(|f| {
-                // let f_name = f.sig.ident.clone();
-                // let f_body = &f.block;
+                let f_name = f.sig.ident.clone();
+                let f_inputs = f.sig.inputs.clone();
+                let f_body = &f.block;
+
+                let f_body = f.block.clone();
+                let f_body = inject_engine_in_block((*f.block).clone());
+
+
                 quote! {
-                    #f
-                    //fn #f_name(engine: &mut RmlEngine) #f_body
+                    //#f
+                    fn #f_name(engine: &mut RmlEngine, #f_inputs)
+                    #f_body
                 }
             })
+            .collect();
+
+        let functions_name: Vec<String> = self.functions
+            .iter()
+            .map(|f| f.sig.ident.to_string())
             .collect();
 
         let functions_code = quote! {
             #(#functions)*
             #(#functions_of_childs)*
         };
+
+        // convert properties in token stream
+        let properties: Vec<proc_macro2::TokenStream> = self
+            .properties
+            .iter()
+            .map(|(k, v)| {
+
+                let k_string = k.to_string();
+
+                if k_string.starts_with("on_") && k_string.ends_with("_changed") {
+                    let observed = k_string.trim_start_matches("on_").trim_end_matches("_changed");
+                    if let Value::Block(block) = v {
+                        // in block, if we see a call to a function, we need to add the engine as first argument to the function
+                        let modified_block = inject_engine_in_block(block.clone());
+                    
+                        quote! {
+                            let cb_id = engine.add_callback( |engine| #modified_block);
+                            engine.bind_node_property_to_callback( #id, #observed, cb_id);
+                        }
+                    } else {
+                        quote! {} // fallback ou erreur
+                    }
+                } else {
+                    let value = value_to_abstract_value(v);
+                    quote! {
+                        let prop_id = engine.add_property(Property::new( #value ));
+                        engine.add_property_to_node(#temp_node, stringify!(#k).to_string() , prop_id);
+                    }
+                }
+            })
+            .collect();
 
         // generate current node
         let node_code = quote! {

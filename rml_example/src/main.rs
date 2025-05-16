@@ -23,20 +23,25 @@ async fn main() {
                 width: 300
                 height: 10.0
                 color: "rgba(1.0, 0.0, 0.0, 1.0)"
+
+                fn set_result(x: f32) {
+                    set_number!(engine, bottom_bar, x, x);
+                }
                 
-                fn compute_bottom_bar_x(engine: &mut RmlEngine) {
+                fn compute_bottom_bar_x(a: &str) {
                     let top_bar_x = get_number!(engine, top_bar, x);
                     let top_bar_width = get_number!(engine, top_bar, width);
                     let bottom_bar_width = get_number!(engine, bottom_bar, width);
                     let bottom_bar_x = top_bar_x + top_bar_width / 2.0 - bottom_bar_width / 2.0;
-                    set_number!(engine, bottom_bar, x, bottom_bar_x);
+                    set_result(bottom_bar_x);
+                    println!("a = {}", a);
                 }
 
-                on_x_change: {
-                    compute_bottom_bar_x(engine);
+                on_x_changed: {
+                    compute_bottom_bar_x("aaa");
                 }
                 
-                on_y_change: {
+                on_y_changed: {
                     let val = engine.get_number_property_of_node("top_bar", "y", 0.0);
                     engine.set_property_of_node("bottom_bar", "y", AbstractValue::Number(val + 20.0));
                 }
