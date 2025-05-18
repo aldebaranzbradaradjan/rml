@@ -38,6 +38,48 @@ pub enum AbstractValue {
     Null,
 }
 
+impl From<u32> for AbstractValue {
+    fn from(val: u32) -> Self {
+        AbstractValue::Number(val as f32)
+    }
+}
+
+impl From<f32> for AbstractValue {
+    fn from(val: f32) -> Self {
+        AbstractValue::Number(val)
+    }
+}
+    
+impl From<bool> for AbstractValue {
+    fn from(val: bool) -> Self {
+        AbstractValue::Bool(val)
+    }
+}
+    
+impl From<&str> for AbstractValue {
+    fn from(val: &str) -> Self {
+        AbstractValue::String(val.to_string())
+    }
+}
+    
+impl From<String> for AbstractValue {
+    fn from(val: String) -> Self {
+        AbstractValue::String(val)
+    }
+}
+    
+impl From<Vec<AbstractValue>> for AbstractValue {
+    fn from(val: Vec<AbstractValue>) -> Self {
+        AbstractValue::Array(val)
+    }
+}
+    
+impl From<()> for AbstractValue {
+    fn from(_: ()) -> Self {
+        AbstractValue::Null
+    }
+}
+
 impl AbstractValue {
     pub fn to_string(&self) -> String {
         match self {

@@ -23,22 +23,18 @@ async fn main() {
                 width: 300
                 height: 10.0
                 color: "rgba(1.0, 0.0, 0.0, 1.0)"
-
-                fn set_result(x: f32) {
-                    set_number!(engine, bottom_bar, x, x);
-                }
                 
-                fn compute_bottom_bar_x(a: &str) {
+                fn compute_bottom_bar_x() -> f32 {
                     let top_bar_x = get_number!(engine, top_bar, x);
                     let top_bar_width = get_number!(engine, top_bar, width);
                     let bottom_bar_width = get_number!(engine, bottom_bar, width);
                     let bottom_bar_x = top_bar_x + top_bar_width / 2.0 - bottom_bar_width / 2.0;
-                    set_result(bottom_bar_x);
-                    println!("a = {}", a);
+                    return bottom_bar_x;
                 }
 
                 on_x_changed: {
-                    compute_bottom_bar_x("aaa");
+                    let x = compute_bottom_bar_x(engine);
+                    set_number!(engine, bottom_bar, x, x);
                 }
                 
                 on_y_changed: {
@@ -58,9 +54,9 @@ async fn main() {
 
             Rectangle {
                 id: bottom_bar
-                x: 0.0
+                x: { compute_bottom_bar_x(&mut engine) }
                 y: 20.0
-                width: 25
+                width: 250
                 height: 25
                 color: "rgba(1.0, 0.0, 1.0, 1.0)"
             }
@@ -103,7 +99,7 @@ async fn main() {
         // this guarantees that the callbacks are run sequentially in the same frame and thread
         engine.run_callbacks();
 
-        clear_background(WHITE);
+        clear_background(BLACK);
         rml_core::draw::draw_element(&engine, "root");
         next_frame().await
     }
