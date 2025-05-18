@@ -1,12 +1,91 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
+
 use syn::parse::{Parse, ParseStream};
-use syn::{parse_macro_input, Ident, Lit, Token};
-use syn::Expr;
+use syn::{parse_macro_input, Ident, Lit, Token, Expr, File, Item, ExprCall};
 
 use uuid::Uuid;
 
 use rml_core::{AbstractValue, ItemTypeEnum, Property, RmlEngine};
+
+
+// fn inject_engine_text_based(input: &str, engine_str: &str, functions: &Vec<String>) -> String {
+//     let mut output = input.to_string();
+//     for func in functions {
+//         let pattern = format!("{func}(");
+//         let replacement = format!("{func}({engine_str}");
+//         output = output.replace(&pattern, &replacement);
+//     }
+//     output
+// }
+
+use std::process::{Command, Stdio};
+
+fn format_code(code: &str) -> String {
+    let mut rustfmt = Command::new("rustfmt")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("Failed to run rustfmt");
+
+    {
+        use std::io::Write;
+        let stdin = rustfmt.stdin.as_mut().expect("Failed to open stdin");
+        stdin.write_all(code.as_bytes()).expect("Failed to write code");
+    }
+
+    let output = rustfmt.wait_with_output().expect("Failed to read output");
+    String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+
+fn inject_engine_text_based(
+    input: &str,
+    engine_str: &str,
+    definition: bool,
+    mutable: bool,
+    functions: &Vec<String>,
+) -> String {
+    let engine_str = if definition {
+        format!("&mut {engine_str}")
+    }
+    else {
+        if mutable {
+            format!("&mut {engine_str}")
+        } else {
+            format!("{engine_str}")
+        }
+    };
+
+    let mut output = String::new();// = input.to_string();
+
+    for line in input.lines() {
+        let mut modified_line = line.to_string();
+        for func in functions {
+            let pattern = format!("fn {func}(");
+            println!("Pattern: {} {}", pattern, modified_line);
+
+            if line.contains(&pattern) {
+                println!("  Found function definition: {}", func);
+                // // we have a function definition
+                // let func = line.split_whitespace().nth(1).unwrap();
+                // let pattern = format!("fn {func}(");
+                // let replacement = format!("fn {func}({engine_str}");
+                // modified_line = modified_line.replace(&pattern, &replacement);
+            }
+            else {
+                let pattern = format!("{func}(");
+                let replacement = format!("{func}({engine_str}");
+                modified_line = modified_line.replace(&pattern, &replacement);
+            }
+        }
+
+        output.push_str(&modified_line);
+        output.push('\n');
+    }
+
+    output
+}
 
 #[proc_macro]
 pub fn rml(input: TokenStream) -> TokenStream {
@@ -17,7 +96,42 @@ pub fn rml(input: TokenStream) -> TokenStream {
     let generated_functions = generated.2;
     let generated_initializer = generated.3;
 
-    //println!("Initializer functions: {:#?}", generated_initializer_functions); // initializer_functions
+    // insert engine parameter in functions and callbacks
+    // extract function names
+    let functions_name: Vec<String> = parsed
+        .functions
+        .iter()
+        .map(|f| f.sig.ident.to_string())
+        .collect();
+    println!("Functions name in macro: {:?}", functions_name);
+    
+    // inject engine in functions
+    // let generated_functions = inject_engine_in_calls(generated_functions.clone(), &functions_name);
+    // // inject engine in initializer
+    // //let generated_initializer = inject_engine_in_calls(generated_initializer.clone(), &functions_name);
+    // // inject engine in callbacks
+    // let generated_node = inject_engine_in_calls(generated_node.clone(), &functions_name);
+
+    // inject engine in initializer
+    let generated_initializer = generated_initializer.to_string();
+    let generated_initializer = inject_engine_text_based(&generated_initializer, "engine", false, true, &functions_name);
+    let generated_initializer = generated_initializer.parse::<proc_macro2::TokenStream>().unwrap();
+
+    // inject engine in functions
+    let generated_functions = generated_functions.to_string();
+    let generated_functions = format_code(&generated_functions);
+    let generated_functions = inject_engine_text_based(&generated_functions, "engine", true, true, &functions_name);
+    let generated_functions = generated_functions.parse::<proc_macro2::TokenStream>().unwrap();
+
+    // inject engine in node
+    let generated_node = generated_node.to_string();
+    let generated_node = inject_engine_text_based(&generated_node, "engine", false, false, &functions_name);
+    let generated_node = generated_node.parse::<proc_macro2::TokenStream>().unwrap();
+
+
+    // let generated_initializer = inject_engine_text_based(&generated_initializer, "&mut engine", &functions_name);
+    // let generated_functions = inject_engine_text_based(&generated_functions, "&mut engine", &functions_name);
+    // let generated_node = inject_engine_text_based(&generated_node, "engine", &functions_name);
 
     let result = quote! {
         {
@@ -26,7 +140,7 @@ pub fn rml(input: TokenStream) -> TokenStream {
             #generated_node; // tree added here
             #generated_functions // functions are added after the tree is built
 
-            // // initializer functions are added here
+            // initializer functions are added here
             #generated_initializer
 
             engine
@@ -160,91 +274,89 @@ fn inject_engine_in_block(mut block: syn::Block, initializer: bool) -> syn::Bloc
     block
 }
 
-fn inject_engine_in_caller(mut block: syn::Block, functions_name: &[String]) -> syn::Block {
-    use syn::{Expr, Stmt};
+// fn inject_engine_in_caller(mut block: syn::Block, functions_name: &[String]) -> syn::Block {
+//     use syn::{Expr, Stmt};
 
-    println!("Injecting engine in caller block, functions: {:?}", functions_name);
+//     println!("Injecting engine in caller block, functions: {:?}", functions_name);
 
-    block.stmts = block
-    .stmts
-    .into_iter()
-    .map(|stmt| match stmt {
-        Stmt::Expr(expr, semi_opt) => {
-            //println!("Expr ! {:?}", quote! {#expr });
-            let new_expr = inject_engine_in_expr(expr, functions_name);
-            Stmt::Expr(new_expr, semi_opt)
-        }
-        Stmt::Local(local) => Stmt::Local(local),
-        Stmt::Item(item) => Stmt::Item(item),
-        other => other,
-    })
-    .collect();
+//     block.stmts = block
+//     .stmts
+//     .into_iter()
+//     .map(|stmt| match stmt {
+//         Stmt::Expr(expr, semi_opt) => {
+//             //println!("Expr ! {:?}", quote! {#expr });
+//             let new_expr = inject_engine_in_expr(expr, functions_name);
+//             Stmt::Expr(new_expr, semi_opt)
+//         }
+//         Stmt::Local(local) => Stmt::Local(local),
+//         Stmt::Item(item) => Stmt::Item(item),
+//         other => other,
+//     })
+//     .collect();
 
-block
+// block
 
-}
-fn inject_engine_in_expr(expr: Expr, functions_name: &[String]) -> Expr {
-    use syn::Expr::*;
+// }
+// fn inject_engine_in_expr(expr: Expr, functions_name: &[String]) -> Expr {
+//     use syn::Expr::*;
     
-    match expr {
-        MethodCall(mut method_call) => {
-            let method_name = method_call.method.to_string();
+//     match expr {
+//         MethodCall(mut method_call) => {
+//             let method_name = method_call.method.to_string();
     
-            if functions_name.iter().any(|name| name == &method_name) {
-                let has_engine = method_call.args.iter().any(|arg| {
-                    matches!(arg, Expr::Path(p) if p.path.is_ident("engine"))
-                });
+//             if functions_name.iter().any(|name| name == &method_name) {
+//                 let has_engine = method_call.args.iter().any(|arg| {
+//                     matches!(arg, Expr::Path(p) if p.path.is_ident("engine"))
+//                 });
     
-                if !has_engine {
-                    let engine_expr: Expr = syn::parse_quote!(engine);
-                    method_call.args.insert(0, engine_expr);
-                }
-            }
+//                 if !has_engine {
+//                     let engine_expr: Expr = syn::parse_quote!(engine);
+//                     method_call.args.insert(0, engine_expr);
+//                 }
+//             }
     
-            // Appliquer récursivement sur les arguments
-            method_call.args = method_call
-                .args
-                .into_iter()
-                .map(|arg| inject_engine_in_expr(arg, functions_name))
-                .collect();
+//             method_call.args = method_call
+//                 .args
+//                 .into_iter()
+//                 .map(|arg| inject_engine_in_expr(arg, functions_name))
+//                 .collect();
     
-            MethodCall(method_call)
-        }
+//             MethodCall(method_call)
+//         }
     
-        Call(mut call_expr) => {
-            call_expr.args = call_expr
-                .args
-                .into_iter()
-                .map(|arg| inject_engine_in_expr(arg, functions_name))
-                .collect();
-            call_expr.func = Box::new(inject_engine_in_expr(*call_expr.func, functions_name));
-            Call(call_expr)
-        }
+//         Call(mut call_expr) => {
+//             call_expr.args = call_expr
+//                 .args
+//                 .into_iter()
+//                 .map(|arg| inject_engine_in_expr(arg, functions_name))
+//                 .collect();
+//             call_expr.func = Box::new(inject_engine_in_expr(*call_expr.func, functions_name));
+//             Call(call_expr)
+//         }
     
-        Let(mut let_expr) => {
-            let_expr.expr = Box::new(inject_engine_in_expr(*let_expr.expr, functions_name));
-            Let(let_expr)
-        }
+//         Let(mut let_expr) => {
+//             let_expr.expr = Box::new(inject_engine_in_expr(*let_expr.expr, functions_name));
+//             Let(let_expr)
+//         }
     
-        Block(mut block_expr) => {
-            block_expr.block = inject_engine_in_caller(block_expr.block, functions_name);
-            Block(block_expr)
-        }
+//         Block(mut block_expr) => {
+//             block_expr.block = inject_engine_in_caller(block_expr.block, functions_name);
+//             Block(block_expr)
+//         }
     
-        If(mut if_expr) => {
-            if_expr.cond = Box::new(inject_engine_in_expr(*if_expr.cond, functions_name));
-            if_expr.then_branch = inject_engine_in_caller(if_expr.then_branch, functions_name);
-            if let Some((else_token, else_expr)) = if_expr.else_branch {
-                let new_else = Box::new(inject_engine_in_expr(*else_expr, functions_name));
-                if_expr.else_branch = Some((else_token, new_else));
-            }
-            If(if_expr)
-        }
+//         If(mut if_expr) => {
+//             if_expr.cond = Box::new(inject_engine_in_expr(*if_expr.cond, functions_name));
+//             if_expr.then_branch = inject_engine_in_caller(if_expr.then_branch, functions_name);
+//             if let Some((else_token, else_expr)) = if_expr.else_branch {
+//                 let new_else = Box::new(inject_engine_in_expr(*else_expr, functions_name));
+//                 if_expr.else_branch = Some((else_token, new_else));
+//             }
+//             If(if_expr)
+//         }
     
-        _ => expr, // tous les autres types : inchangés
-    }
-    
-    }
+//         _ => expr,
+//     }
+// }
 
 /// Struct to parse a Node
 struct RmlNode {
@@ -321,6 +433,7 @@ impl Parse for RmlNode {
             } else if content.peek(Ident) {
                 // we have a child
                 let child: RmlNode = content.parse()?;
+                functions.append(&mut child.functions.clone());
                 children.push(child);
             } else {
                 return Err(content.error("Unexpected token"));
@@ -382,11 +495,11 @@ impl RmlNode {
             })
             .collect();
 
-        // get functions code
-        let functions_of_childs: Vec<proc_macro2::TokenStream> = child_results
-            .iter()
-            .map(|(_, _, functions, _)| functions.clone())
-            .collect();
+        // // get functions code
+        // let functions_of_childs: Vec<proc_macro2::TokenStream> = child_results
+        //     .iter()
+        //     .map(|(_, _, functions, _)| functions.clone())
+        //     .collect();
 
         let initializer_of_childs: Vec<proc_macro2::TokenStream> = child_results
             .iter()
@@ -410,13 +523,13 @@ impl RmlNode {
                             quote! {
                                 // create AbstractValue from the value
                                 let value: AbstractValue = #modified_block .into();
-                                let prop_id = engine.add_property(Property::new( value ));
-                                engine.add_property_to_node(#temp_node, stringify!(#k).to_string() , prop_id);
+                                let node_name = engine.get_node(#temp_node).unwrap().id.clone();
+                                engine.set_property_of_node(&node_name, stringify!(#k), value);
+                                //let prop_id = engine.add_property(Property::new( value ));
+                                //engine.add_property_to_node(#temp_node, stringify!(#k).to_string() , prop_id);
                             }
                         }
-                        _ => {
-                            quote! {}   
-                        }
+                        _ => { quote! {} }
                     };
 
                     value
@@ -440,22 +553,25 @@ impl RmlNode {
                 let f_inputs = f.sig.inputs.clone();
                 let f_output = f.sig.output.clone();
                 let f_body = inject_engine_in_block((*f.block).clone(), false);
+                //let f_body = f.block.clone();
 
                 let res = match f_output {
                     syn::ReturnType::Default => {
                         quote! {
-                            //#f
-                            fn #f_name(engine: &mut RmlEngine, #f_inputs) #f_body
+                                fn #f_name(engine: &mut RmlEngine, #f_inputs) #f_body
                         }
                     }
                     _ => {
                         quote! {
                             //#f
+                            //{
                             fn #f_name(engine: &mut RmlEngine, #f_inputs) #f_output
                             #f_body
+                            //}
                         }
                     }
                 };
+                println!("Function name: {}", f_name);
                 //println!("Function code: {}", quote! {#res});
                 res
                 
@@ -469,7 +585,6 @@ impl RmlNode {
 
         let functions_code = quote! {
             #(#functions)*
-            #(#functions_of_childs)*
         };
 
         // convert properties in token stream
@@ -499,13 +614,9 @@ impl RmlNode {
                     // test if the property is a block code or a value
                     let value = match v {
                         Value::Block(block) => {
-                            //let modified_block = inject_engine_in_block(block.clone(), true);
-                            let modified_block = block; //inject_engine_in_caller(block.clone(), &functions_name);
-                            println!("Modified property block: {:?}", quote! { #modified_block }.to_string());
+                            // will be setted later with an initializer
                             quote! {
-                                // create AbstractValue from the value
-                                let value: AbstractValue = #modified_block .into();
-                                let prop_id = engine.add_property(Property::new( value ));
+                                let prop_id = engine.add_property(Property::new( AbstractValue::Null ));
                                 engine.add_property_to_node(#temp_node, stringify!(#k).to_string() , prop_id);
                             }
                         }
