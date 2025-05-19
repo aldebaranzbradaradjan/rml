@@ -7,3 +7,4 @@ edition = "2021"
 quote = "1.0"
 proc-macro2 = "1.0"
 macroquad = { version = "0.4.14" }
+indexmap = "2.9.0"

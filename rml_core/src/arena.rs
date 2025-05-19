@@ -1,7 +1,9 @@
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap};
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
+
+use indexmap::IndexSet;
 
 use crate::{Property, PropertyId, AbstractValue};
 
@@ -30,7 +32,7 @@ pub struct ArenaNode {
     pub node_type: ItemTypeEnum,
     pub properties: PropertyMap,
     pub parent: Option<NodeId>,
-    pub children: HashSet<NodeId>,
+    pub children: IndexSet<NodeId>,
 }
 
 impl ArenaNode {
@@ -40,7 +42,7 @@ impl ArenaNode {
             node_type: ItemTypeEnum::Node,
             properties: PropertyMap::new(),
             parent: None,
-            children: HashSet::new(),
+            children: IndexSet::new(),
         }
     }
 
@@ -112,7 +114,7 @@ impl ArenaTree {
             node_type,
             properties,
             parent: None,
-            children: HashSet::new(),
+            children: IndexSet::new(),
         });
         self.id_to_node_id.insert(id, node_id);
         Some(node_id)
@@ -178,7 +180,7 @@ impl ArenaTree {
     /// Remove a node by NodeId
     pub fn remove_node(&mut self, node_id: NodeId) {
         let mut parent_node: Option<NodeId> = None;
-        let mut children: HashSet<usize> = HashSet::new();
+        let mut children: IndexSet<usize> = IndexSet::new();
         let mut id = String::new();
 
         if let Some(node) = self.nodes.get(node_id) {
