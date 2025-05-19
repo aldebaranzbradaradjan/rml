@@ -3,12 +3,12 @@
 use macroquad::prelude::*;
 
 use std::collections::HashMap;
-use rml_core::{ RmlEngine, Property, AbstractValue, get_number, set_number, ItemTypeEnum};
+use rml_core::{ RmlEngine, Property, AbstractValue, get_number, set_number, get_string, set_string, ItemTypeEnum};
 use rml_macros::rml;
 
 fn window_conf() -> Conf {
     Conf {
-        window_title: "Window Conf".to_owned(),
+        window_title: "RML Example".to_owned(),
         window_width: 500,
         window_height: 500,
         window_resizable: true,
@@ -25,71 +25,6 @@ fn window_conf() -> Conf {
 async fn main() {
 
     // Initialize the RML engine
-    // let mut engine = rml!(
-    //     Node {
-    //         id: root
-    //         width: 500.0
-    //         height: 500.0
-
-    //         Rectangle {
-    //             id: top_bar
-    //             x: { // initilizers are executed at runtime after the node is created
-    //                 // center the top bar
-    //                 let root_width = get_number!(engine, root, width);
-    //                 let top_bar_width = get_number!(engine, top_bar, width);
-    //                 let top_bar_x = root_width / 2.0 - top_bar_width / 2.0;
-    //                 top_bar_x
-    //             }
-    //             y: {
-    //                 let root_height = get_number!(engine, root, height);
-    //                 let top_bar_height = get_number!(engine, top_bar, height);
-    //                 let top_bar_y = root_height / 2.0 - top_bar_height / 2.0;
-    //                 top_bar_y
-    //             }
-    //             width: 200
-    //             height: 200.0
-    //             color: "rgba(1.0, 0.0, 0.0, 1.0)"
-                
-    //             // functions are defined at the end of the node generation code
-    //             fn compute_bottom_bar_x() -> f32 {
-    //                 let top_bar_x = get_number!(engine, top_bar, x);
-    //                 let top_bar_width = get_number!(engine, top_bar, width);
-    //                 let bottom_bar_width = get_number!(engine, bottom_bar, width);
-    //                 let bottom_bar_x = top_bar_x + top_bar_width / 2.0 - bottom_bar_width / 2.0;
-    //                 return bottom_bar_x;
-    //             }
-
-    //             on_x_changed: { // this is a callback that is executed when the x property of the top_bar changes
-    //                 let x = compute_bottom_bar_x();
-    //                 set_number!(engine, bottom_bar, x, x);
-    //             }
-                
-    //             on_y_changed: {
-    //                 let val = engine.get_number_property_of_node("top_bar", "y", 0.0);
-    //                 engine.set_property_of_node("bottom_bar", "y", AbstractValue::Number(val + 20.0));
-    //             }
-
-    //             Rectangle {
-    //                 id: inner_rect
-    //                 x: 20.0
-    //                 y: 20.0
-    //                 width: 25
-    //                 height: 25
-    //                 color: "rgba(0.3, 0.5, 0.3, 1.0)"
-    //             }
-    //         }
-
-    //         Rectangle {
-    //             id: bottom_bar
-    //             x: { compute_bottom_bar_x() }
-    //             y: 20.0
-    //             width: 250
-    //             height: 25
-    //             color: "rgba(1.0, 0.0, 1.0, 1.0)"
-    //         }
-    //     }
-    // );
-
     let mut engine = rml!(
         Node {
             id: root
@@ -116,6 +51,16 @@ async fn main() {
                 width: 200
                 height: 200
                 color: "rgba(1.0, 0.0, 0.0, 1.0)"
+
+                fn set_text() {
+                    let x = engine.get_number_property_of_node("outer_rect", "x", 0.0);
+                    let y = engine.get_number_property_of_node("outer_rect", "y", 0.0);
+                    let text = format!("rml {x} {y}");
+                    set_string!(engine, text, text, text);
+                }
+
+                on_x_changed: { set_text() }
+                on_y_changed: { set_text() }
                 
                 Rectangle {
                     id: inner_rect
@@ -137,30 +82,29 @@ async fn main() {
 
                     Rectangle {
                         id: inner_inner_rect
-                        x: 30
-                        y: 30
-                        width: 100
-                        height: 100
-                        color: "rgba(0.0, 0.5, 0.3, 1.0)"
+                        x: 150
+                        y: 150
+                        width: 10
+                        height: 10
+                        color: "rgba(0.0, 0., 0.3, 1.0)"
                     }
 
                     Node {
                         id: inner_inner_node
-                        x: 35
-                        y: 35
+                        x: 0
+                        y: 0
                         width: 100
                         height: 100
-                        color: "rgba(0.0, 0.5, 0.3, 1.0)"
 
                         Text {
-                            id: inner_inner_text
+                            id: text
                             x: 0
                             y: 0
                             width: 100
                             height: 100
-                            color: "rgba(1.0, 1.0, 1.0, 1.0)"
+                            color: "rgba(0.0, 0.0, 1.0, 1.0)"
                             text: "rml"
-                            font_size: 30
+                            font_size: 20
                         }
                     }
                 }
