@@ -31,9 +31,6 @@ async fn main() {
             width: 500.0
             height: 500.0
 
-            // draw a rectangle at the center of the screen
-            // In this rectangle, draw 4 Rectangles to create border of 10 px,
-            // then draw rectangle in the right bottom edge to draw a simplifier RML letters
             Rectangle {
                 id: outer_rect
                 x: {
