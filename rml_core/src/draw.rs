@@ -96,12 +96,12 @@ fn compute_geometry(engine: &RmlEngine, computed_parent_x : f32, computed_parent
     }
 
     // Compute the width and height of the node
-    width = width - right_margin;
-    height = height - bottom_margin;
+    // width = width - right_margin;
+    // height = height - bottom_margin;
 
     // Compute the position of the node
-    x = computed_parent_x + x + left_margin;
-    y = computed_parent_y + y + top_margin;
+    x = computed_parent_x + x + left_margin - right_margin;
+    y = computed_parent_y + y + top_margin - bottom_margin;
 
     (x, y, width, height)
 }

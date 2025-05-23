@@ -179,6 +179,7 @@ async fn main() {
 
                     Rectangle {
                         anchors: left | right | bottom
+                        bottom_margin: 10
                         width: 10
                         height: 10
                         color: "rgba(1., 0., 0., 1.0)"
