@@ -132,6 +132,14 @@ impl RmlEngine {
         }
     }
 
+    pub fn get_parent_by_id(&self, node_id_str: &str) -> Option<&ArenaNode> {
+        if let Some(parent_id) = self.get_parent_id(node_id_str) {
+            self.arena.get_node(parent_id)
+        } else {
+            None
+        }
+    }
+
     pub fn get_parent_id(&self, node_id_str: &str) -> Option<NodeId> {
         if let Some(node_id) = self.arena.id_to_node_id.get(node_id_str) {
             self.arena.get_node(*node_id).and_then(|node| node.parent)

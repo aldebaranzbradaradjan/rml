@@ -99,7 +99,8 @@ async fn main() {
                         id: mouth
 
                         // margins
-                        margins: 10
+                        margins: 2
+                        bottom_margin: 50
                         anchors: center
 
                         // left_margin: 0
@@ -116,7 +117,7 @@ async fn main() {
 
                         // // layout for child of layouted node
                         // // under the hood, the property name is like this : "layout_left_margin"
-                        // layout.fill_width: true
+                        layout.fill_width: true
                         // layout.fill_height: true
                         // layout.min_width: 10
                         // layout.min_height: 10
@@ -146,6 +147,7 @@ async fn main() {
                             height: 10
                             color: "rgba(0., 0., 0., 1.0)"
                         }
+
                         Rectangle {
                             id: mouth_r
                             x: 100
@@ -173,6 +175,13 @@ async fn main() {
                             text: "rml"
                             font_size: 20
                         }
+                    }
+
+                    Rectangle {
+                        anchors: left | right | bottom
+                        width: 10
+                        height: 10
+                        color: "rgba(1., 0., 0., 1.0)"
                     }
                 }
             }
