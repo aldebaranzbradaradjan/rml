@@ -131,6 +131,14 @@ impl RmlEngine {
             None
         }
     }
+
+    pub fn get_parent_id(&self, node_id_str: &str) -> Option<NodeId> {
+        if let Some(node_id) = self.arena.id_to_node_id.get(node_id_str) {
+            self.arena.get_node(*node_id).and_then(|node| node.parent)
+        } else {
+            None
+        }
+    }
     
     pub fn remove_node(&mut self, node_id: NodeId) {
         self.arena.remove_node(node_id);

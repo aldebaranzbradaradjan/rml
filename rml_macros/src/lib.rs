@@ -1,7 +1,8 @@
 use proc_macro::TokenStream;
-use quote::{format_ident, quote};
+use proc_macro2::Span;
+use quote::{format_ident, quote, ToTokens};
 
-use syn::parse::{Parse, ParseStream};
+use syn::parse::{Parse, ParseBuffer, ParseStream};
 use syn::{parse_macro_input, Ident, Lit, Token, Expr, File, Item, ExprCall};
 
 use uuid::Uuid;
@@ -307,26 +308,34 @@ impl Parse for RmlNode {
                 // read a property
                 let key: Ident = content.parse()?;
                 content.parse::<Token![:]>()?;
+                let value = property_parse(&content)?;
 
-                let value: Value;
-                if content.peek(Lit) {
-                    value = Value::Lit(content.parse()?);
-                } else if content.peek(Ident) {
-                    value = Value::Ident(content.parse()?);
-                } else if content.peek(syn::token::Brace) {
-                    let block: syn::Block = content.parse()?;
-                    value = Value::Block(block);
-                } else {
-                    return Err(content.error("Expected literal, identifier or block"));
-                }
-                content.parse::<Token![,]>().ok(); // optional virgule
+                content.parse::<Token![,]>().ok(); // optional comma
                 properties.push((key, value));
-            } else if content.peek(Ident) {
+            }
+            else if content.peek(syn::Ident) && content.peek2(Token![.]) {
+                //  try to parse property with one dot in it name
+                let left: syn::Expr = content.parse()?;
+                if content.peek(Token![:]) {
+                    content.parse::<Token![:]>()?;
+                    println!("Found property with dot: {}", left.to_token_stream());
+                    let value = property_parse(&content)?;
+
+                    content.parse::<Token![,]>().ok(); // optional comma
+                    let prop_str = left.to_token_stream().to_string().replace(".", "_");
+                    let left = format_ident!("{}", prop_str);
+                    properties.push((left, value));
+                    
+                    //continue;
+                }
+            }
+            else if content.peek(Ident) {
                 // we have a child
                 let child: RmlNode = content.parse()?;
                 functions.append(&mut child.functions.clone());
                 children.push(child);
-            } else {
+            }
+            else {
                 return Err(content.error("Unexpected token"));
             }
         }
@@ -338,6 +347,55 @@ impl Parse for RmlNode {
             functions,
         })
     }
+}
+
+fn property_parse(content: &ParseBuffer) -> Result<Value, syn::Error> {
+    let value: Value;
+    if content.peek(Lit) {
+        println!("Found literal");
+        value = Value::Lit(content.parse()?);
+    } else if content.peek(Ident) {
+        println!("Found identifier");
+        println!("content peek ident: {:?} {:?}", content.peek(Ident), content.peek2(Token![|]));
+        //value = Value::Ident(content.parse()?);
+
+        if content.peek(Ident) && content.peek2(Token![|]) {
+            // we have a composed value, parse as string
+            let mut composed_value = String::new();
+            while !content.peek(Token![|]) {
+                let ident: Ident = content.parse()?;
+                composed_value.push_str(&ident.to_string());
+                composed_value.push_str("__");
+
+                if content.peek(Token![|]) {
+                    content.parse::<Token![|]>()?;
+                } // if line return, break
+                if content.peek(Token![;]) || content.peek(Token![,]) {
+                    break;
+                }
+                if content.peek(Ident) && content.peek2(Token![:]) {
+                    break;
+                }
+                if content.peek(Ident) && content.peek2(Token![.]) {
+                    break;
+                }
+            }
+            println!("composed value: {}", composed_value);
+            value = Value::Ident(Ident::new(&composed_value, Span::call_site()));
+
+            
+        } else {
+            value = Value::Ident(content.parse()?);
+        }
+
+    } else if content.peek(syn::token::Brace) {
+        let block: syn::Block = content.parse()?;
+        value = Value::Block(block);
+    } else {
+        //println!("Found unexpected token");
+        return Err(content.error("Expected literal, identifier or block"));
+    }
+    Ok(value)
 }
 
 type GenResult = (String, proc_macro2::TokenStream, proc_macro2::TokenStream, proc_macro2::TokenStream);

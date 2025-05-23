@@ -45,6 +45,7 @@ async fn main() {
                     let outer_rect_y = root_height / 2.0 - outer_rect_height / 2.0;
                     outer_rect_y
                 }
+
                 width: 200
                 height: 200
                 color: "rgba(1.0, 1.0, 1.0, 1.0)"
@@ -71,6 +72,7 @@ async fn main() {
                         let inner_rect_height = get_number!(engine, inner_rect, height);
                         outer_rect_height / 2.0 - inner_rect_height / 2.0
                     }
+                    
                     width: 160
                     height: 160
                     color: "rgba(0.3, 0.3, 0.3, 1.0)"
@@ -95,6 +97,41 @@ async fn main() {
 
                     Rectangle {
                         id: mouth
+
+                        // margins
+                        margins: 10
+                        anchors: center
+
+                        // left_margin: 0
+                        // right_margin: 0
+                        // top_margin: 0
+                        // bottom_margin: 0
+
+                        // anchors, if used in a non layouted node, it place the node relative to the parent node
+                        // anchors: top | bottom | left | right | horizontal_center | vertical_center | center | fill
+                        // if used in a layouted node, it place the node relative to a box in the layout ?
+                        // not sure is this make sense, maybe just limit the anchors to the non layouted node
+                        // under the hood, the property is a string, so it can be used as a string
+                        // anchors: horizontal_center | vertical_center | left | right | top | bottom 
+
+                        // // layout for child of layouted node
+                        // // under the hood, the property name is like this : "layout_left_margin"
+                        // layout.fill_width: true
+                        // layout.fill_height: true
+                        // layout.min_width: 10
+                        // layout.min_height: 10
+                        // layout.max_width: 10
+                        // layout.max_height: 10
+
+                        // // // layout for layouted node
+                        // layout.mode: column
+                        // layout.mode: row
+                        // layout.mode: grid
+                        // layout.spacing: 10
+                        // layout.vertical_spacing: 10
+                        // layout.horizontal_spacing: 10
+
+
                         x: 30
                         y: 100
                         width: 100
