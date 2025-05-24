@@ -15,7 +15,7 @@ pub struct ArenaTree {
     pub id_to_node_id: HashMap<ArenaNodeId, NodeId>,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum ItemTypeEnum {
     Node,
     Rectangle,
@@ -153,6 +153,19 @@ impl ArenaTree {
         self.nodes
             .get(node_id)
             .map(|node| node.children.iter().copied().collect())
+            .unwrap_or_default()
+    }
+
+    /// Get all children str ids of a node
+    pub fn get_childrens_ids_str(&self, node_id: NodeId) -> Vec<ArenaNodeId> {
+        self.nodes
+            .get(node_id)
+            .map(|node| {
+                node.children
+                    .iter()
+                    .filter_map(|&child_id| self.get_node(child_id).map(|n| n.id.clone()))
+                    .collect()
+            })
             .unwrap_or_default()
     }
 

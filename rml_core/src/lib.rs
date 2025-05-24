@@ -3,6 +3,7 @@ pub mod properties;
 pub mod arena;
 pub mod draw;
 
+use arena::ArenaNodeId;
 pub use arena::{ArenaNode, ArenaTree, NodeId, PropertyMap, PropertyName, ItemTypeEnum};
 pub use properties::{AbstractValue, Property};
 
@@ -103,27 +104,56 @@ impl RmlEngine {
     pub fn add_node(&mut self, id: String, node_type: ItemTypeEnum, properties: PropertyMap) -> Option<NodeId> {
         self.arena.add_node(node_type, id, properties)
     }
+
     pub fn add_child(&mut self, parent_id: NodeId, child_id: NodeId) {
         self.arena.add_child(parent_id, child_id);
     }
+
     pub fn get_node_by_id(&self, id: &str) -> Option<&ArenaNode> {
         self.arena.get_node_by_id(id)
     }
+
     pub fn get_node_mut_by_id(&mut self, id: &str) -> Option<&mut ArenaNode> {
         self.arena.get_node_mut_by_id(id)
     }
+
     pub fn get_node(&self, node_id: NodeId) -> Option<&ArenaNode> {
         self.arena.get_node(node_id)
     }
+
     pub fn get_node_mut(&mut self, node_id: NodeId) -> Option<&mut ArenaNode> {
         self.arena.get_node_mut(node_id)
     }
+
     pub fn get_children(&self, node_id: NodeId) -> Vec<&ArenaNode> {
         self.arena.get_children(node_id)
     }
+
     pub fn get_children_by_id(&self, node_id_str: &str) -> Option<Vec<&ArenaNode>> {
         self.arena.get_children_by_id(node_id_str)
     }
+
+    pub fn get_childrens_ids(&self, node_id_str: &str) -> Vec<NodeId> {
+        if let Some(node_id) = self.arena.id_to_node_id.get(node_id_str) {
+            return self.arena.get_childrens_ids(*node_id);
+        }
+        else {
+            Vec::new()
+        }
+    }
+
+    pub fn get_children_str_ids(&self, node_id: NodeId) -> Vec<ArenaNodeId> {
+        self.arena.get_childrens_ids_str(node_id)
+    }
+
+    pub fn get_children_str_ids_by_id(&self, node_id_str: &str) -> Option<Vec<ArenaNodeId>> {
+        if let Some(node_id) = self.arena.id_to_node_id.get(node_id_str) {
+            Some(self.arena.get_childrens_ids_str(*node_id))
+        } else {
+            None
+        }
+    }
+
     pub fn get_childrens_id(&self, node_id_str: &str) -> Option<Vec<NodeId>> {
         if let Some(node_id) = self.arena.id_to_node_id.get(node_id_str) {
             Some(self.arena.get_childrens_ids(*node_id))
@@ -301,6 +331,10 @@ impl RmlEngine {
         for (_cb_id, callback) in callbacks_to_run {
             callback(self);
         }
+    }
+
+    pub fn get_node_type(&self, node_id: &str) -> Option<ItemTypeEnum> {
+        self.arena.get_node_by_id(node_id).map(|node| node.node_type.clone())
     }
 
 }

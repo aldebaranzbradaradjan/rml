@@ -31,6 +31,145 @@ async fn main() {
             width: 500.0
             height: 500.0
 
+            // a rectangle anchored to fill the root node
+            Rectangle {
+                width: 10
+                height: 10
+                anchors: fill
+                color: "rgba(1.0, 0.0, 0.0, 0.3)"
+            }
+            
+            // a rectangle anchored to fill the root node, but with margins
+            Rectangle {
+                width: 10
+                height: 10
+                anchors: fill
+                margins: 50
+                color: "rgba(0.0, 1.0, 0.0, 0.3)"
+            }
+
+            // a rectangle anchored in top left corner of the root node
+            Rectangle {
+                width: 10
+                height: 10
+                anchors: top | left
+                color: "rgba(0.0, 1.0, 0.0, 1.0)"
+            }
+
+            // a rectangle anchored in top right corner of the root node
+            Rectangle {
+                width: 10
+                height: 10
+                anchors: top | right
+                color: "rgba(0.0, 0.0, 1.0, 1.0)"
+            }
+
+            // a rectangle anchored in bottom left corner of the root node
+            Rectangle {
+                width: 10
+                height: 10
+                anchors: bottom | left
+                color: "rgba(1.0, 1.0, 0.0, 1.0)"
+            }
+
+            // a rectangle anchored in bottom right corner of the root node
+            Rectangle {
+                width: 10
+                height: 10
+                anchors: bottom | right
+                color: "rgba(1.0, 0.0, 1.0, 1.0)"
+            }
+
+            // a rectangle anchored at left and right of the root node and centered vertically
+            Rectangle {
+                width: 10
+                height: 10
+                anchors: left | right | vertical_center
+                color: "rgba(0.5, 0.0, 0.5, 1.0)"
+            }
+
+            // a rectangle anchored at top and bottom of the root node and centered horizontally
+            Rectangle {
+                width: 10
+                height: 10
+                anchors: top | bottom | horizontal_center
+                color: "rgba(0.5, 0.5, 0.0, 1.0)"
+            }
+
+            // a rectangle anchored in the center of the root node
+            Rectangle {
+                width: 10
+                height: 10
+                anchors: center
+                color: "rgba(0.5, 0.7, 0.5, 1.0)"
+            }
+
+            // a text node anchored to the top left corner of the root node with a margin and a width specified
+            Text {
+                anchors: top | left
+                margins: 20
+                width: 30
+                color: "rgba(1.0, 1.0, 1.0, 1.0)"
+                text: "Test Text"
+                font_size: 20
+            }
+
+            Text {
+                x: 20
+                y: 0
+                color: "rgba(1.0, 1.0, 1.0, 1.0)"
+                text: "Test Text"
+                font_size: 20
+            }
+
+            // a smiling face made of rectangles
+            Rectangle {
+                anchors: right | top
+                margins: 20
+                width: 100
+                height: 100
+                color: "rgba(1.0, 1.0, 1.0, 1.0)"
+                
+                Rectangle {
+                    anchors: left | top
+                    margins: 30
+                    width: 10
+                    height: 10
+                    color: "rgba(0., 0., 0., 1.0)"
+                }
+                Rectangle {
+                    anchors: right | top
+                    margins: 30
+                    width: 10
+                    height: 10
+                    color: "rgba(0., 0., 0., 1.0)"
+                }
+                Rectangle {
+                    anchors: bottom | horizontal_center
+                    bottom_margin: 30
+                    width: 70
+                    height: 10
+                    color: "rgba(0., 0., 0., 1.0)"
+
+                    Rectangle {
+                        anchors: left | top
+                        left_margin: -10
+                        top_margin: -10
+                        width: 10
+                        height: 10
+                        color: "rgba(0., 0., 0., 1.0)"
+                    }
+                    Rectangle {
+                        anchors: right | top
+                        right_margin: -10
+                        top_margin: -10
+                        width: 10
+                        height: 10
+                        color: "rgba(0., 0., 0., 1.0)"
+                    }
+                }
+            }
+
             Rectangle {
                 id: outer_rect
                 x: {
@@ -161,14 +300,14 @@ async fn main() {
                     Node {
                         id: inner_inner_node
                         x: 10
-                        y: 20
+                        y: 0
                         width: 100
                         height: 100
 
                         Text {
                             id: text
                             x: 0
-                            y: 0
+                            y: 5
                             width: 100
                             height: 100
                             color: "rgba(1.0, 1.0, 1.0, 1.0)"
@@ -186,6 +325,8 @@ async fn main() {
                     }
                 }
             }
+        
+
         }
     );
 
@@ -229,7 +370,7 @@ async fn main() {
         engine.run_callbacks();
 
         clear_background(BLACK);
-        rml_core::draw::draw_childs(&engine, "root", 0., 0.);
+        rml_core::draw::draw_childs(&mut engine, "root", (0., 0.));
         next_frame().await
     }
 }

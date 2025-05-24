@@ -1,154 +1,297 @@
 use macroquad::prelude::*;
-
-use crate::{RmlEngine, Property, AbstractValue, ItemTypeEnum};
-
+use crate::{RmlEngine, ItemTypeEnum};
 use std::collections::VecDeque;
 
-fn compute_geometry(engine: &RmlEngine, computed_parent_x : f32, computed_parent_y : f32, node_id: &str) -> (f32, f32, f32, f32) {
-    let mut x = engine.get_number_property_of_node(node_id, "x", 0.0);
-    let mut y = engine.get_number_property_of_node(node_id, "y", 0.0);
-    let mut width = engine.get_number_property_of_node(node_id, "width", 0.0);
-    let mut height = engine.get_number_property_of_node(node_id, "height", 0.0);
-    
-    // Get the parent node
-    let (parent_width, parent_height) = match engine.get_parent_by_id(node_id) {
-        None => {
-            (0.0, 0.0)
-        }
-        Some(parent) => {
-            // Get the parent node's properties
-            let id = parent.id.as_str();
-            // Get the parent node's properties
-            let parent_width = engine.get_number_property_of_node(id, "width", 0.0);
-            let parent_height = engine.get_number_property_of_node(id, "height", 0.0);
-            (parent_width, parent_height)
-        }
-    };
-
-    // get the node anchors values
-    // anchors: top | bottom | left | right | horizontal_center | vertical_center | center | fill
-    let anchors = engine.get_string_property_of_node(node_id, "anchors", "".to_string());
-    let anchors = anchors.split("__").collect::<Vec<&str>>();
-    for anchor in anchors.clone() {
-        // Compute the position of the node
-        match anchor {
-            "top" => y = 0.,
-            "bottom" => y = parent_height - height,
-            "left" => x = 0.,
-            "right" => x = parent_width - width,
-            "horizontal_center" => x = (parent_width / 2.0) - (width / 2.0),
-            "vertical_center" => y = (parent_height / 2.0) - (height / 2.0),
-            "center" => {
-                x = (parent_width / 2.0) - (width / 2.0);
-                y = (parent_height / 2.0) - (height / 2.0);
-            }
-            _ => {}
-        }
-    }
-
-    // if fill or top && bottom are set, we need to compute the height to shrink the item
-    if anchors.contains(&"fill") || (anchors.contains(&"top") && anchors.contains(&"bottom")) {
-        y = 0.; height = parent_height;
-    }
-    // if fill or left && right are set, we need to compute the width to shrink the item
-    if anchors.contains(&"fill") || (anchors.contains(&"left") && anchors.contains(&"right")) {
-        x = 0.; width = parent_width;
-    }
-
-    // Get the margins values
-    let margins = engine.get_number_property_of_node(node_id, "margins", 0.0);
-    let mut left_margin = engine.get_number_property_of_node(node_id, "left_margin", margins);
-    let mut right_margin = engine.get_number_property_of_node(node_id, "right_margin", margins);
-    let mut top_margin = engine.get_number_property_of_node(node_id, "top_margin", margins);
-    let mut bottom_margin = engine.get_number_property_of_node(node_id, "bottom_margin", margins);
-    
-    if !anchors.contains(&"left") {
-        left_margin = 0.;
-    }
-    if !anchors.contains(&"right") {
-        right_margin = 0.;
-    }
-    if !anchors.contains(&"top") {
-        top_margin = 0.;
-    }
-    if !anchors.contains(&"bottom") {
-        bottom_margin = 0.;
-    }
-    if anchors.contains(&"vertical_center") {
-        top_margin = 0.;
-        bottom_margin = 0.;
-    }
-    if anchors.contains(&"horizontal_center") {
-        left_margin = 0.;
-        right_margin = 0.;
-    }
-    if anchors.contains(&"center") {
-        top_margin = 0.;
-        bottom_margin = 0.;
-        left_margin = 0.;
-        right_margin = 0.;
-    }
-    if anchors.contains(&"fill") {
-        top_margin = 0.;
-        bottom_margin = 0.;
-        left_margin = 0.;
-        right_margin = 0.;
-    }
-
-    // Compute the width and height of the node
-    // width = width - right_margin;
-    // height = height - bottom_margin;
-
-    // Compute the position of the node
-    x = computed_parent_x + x + left_margin - right_margin;
-    y = computed_parent_y + y + top_margin - bottom_margin;
-
-    (x, y, width, height)
+#[derive(Debug, Clone, PartialEq)]
+enum Anchor {
+    Top,
+    Bottom, 
+    Left,
+    Right,
+    HorizontalCenter,
+    VerticalCenter,
+    Center,
+    Fill,
 }
 
-pub fn draw_childs(engine : &RmlEngine, node_id : &str, computed_parent_x : f32, computed_parent_y : f32) {
-    // Draw the elements in the node
-    if let Some(childs) = engine.get_children_by_id(node_id) {
-        if childs.is_empty() { return; }
-        let mut childs_computed_x = VecDeque::new();
-        let mut childs_computed_y = VecDeque::new();
+impl Anchor {
+    fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "top" => Some(Anchor::Top),
+            "bottom" => Some(Anchor::Bottom),
+            "left" => Some(Anchor::Left),
+            "right" => Some(Anchor::Right),
+            "horizontal_center" => Some(Anchor::HorizontalCenter),
+            "vertical_center" => Some(Anchor::VerticalCenter),
+            "center" => Some(Anchor::Center),
+            "fill" => Some(Anchor::Fill),
+            _ => None,
+        }
+    }
+}
 
-        for node in childs.clone() {
-            // Compute the position of the node
-            let (computed_x,
-                computed_y,
-                computed_width,
-                computed_height) = compute_geometry(engine, computed_parent_x, computed_parent_y, node.id.as_str());
+#[derive(Debug, Clone)]
+struct Margins {
+    top: f32,
+    bottom: f32,
+    left: f32,
+    right: f32,
+}
 
-            childs_computed_x.push_back(computed_x);
-            childs_computed_y.push_back(computed_y);
+impl Margins {
+    fn new(engine: &RmlEngine, node_id: &str) -> Self {
+        let base_margin = engine.get_number_property_of_node(node_id, "margins", 0.0);
+        Self {
+            top: engine.get_number_property_of_node(node_id, "top_margin", base_margin),
+            bottom: engine.get_number_property_of_node(node_id, "bottom_margin", base_margin),
+            left: engine.get_number_property_of_node(node_id, "left_margin", base_margin),
+            right: engine.get_number_property_of_node(node_id, "right_margin", base_margin),
+        }
+    }
 
-            if node.node_type == ItemTypeEnum::Rectangle {
-                let width = computed_width;//engine.get_number_property_of_node(node.id.as_str(), "width", 0.0);
-                let height = computed_height;//engine.get_number_property_of_node(node.id.as_str(), "height", 0.0);
-                let color = engine.get_color_property_of_node(node.id.as_str(), "color", WHITE);
-                draw_rectangle(computed_x, computed_y, width, height, color);
+    fn apply_anchor_constraints(&mut self, anchors: &[Anchor]) {
+        for anchor in anchors {
+            match anchor {
+                Anchor::HorizontalCenter => {
+                    self.left = 0.0;
+                    self.right = 0.0;
+                }
+                Anchor::VerticalCenter => {
+                    self.top = 0.0;
+                    self.bottom = 0.0;
+                }
+                Anchor::Center => {
+                    self.left = 0.0;
+                    self.right = 0.0;
+                    self.top = 0.0;
+                    self.bottom = 0.0;
+                }
+                _ => {} // other anchors keep their margins
             }
-            else if node.node_type == ItemTypeEnum::Text {
-                let text = engine.get_string_property_of_node(node.id.as_str(), "text", "".to_string());
-                let color = engine.get_color_property_of_node(node.id.as_str(), "color", WHITE);
-                let font_size = engine.get_number_property_of_node(node.id.as_str(), "font_size", 20.0);
-                draw_text_ex(&text, computed_x, computed_y, TextParams {
+        }
+
+        // if fill ies specified, don't alter margins
+        if anchors.contains(&Anchor::Fill) { return; }
+
+        // special logic: if we don't have the corresponding anchor, no margin
+        if !anchors.contains(&Anchor::Left) { self.left = 0.0; }
+        if !anchors.contains(&Anchor::Right) { self.right = 0.0; }
+        if !anchors.contains(&Anchor::Top) { self.top = 0.0; }
+        if !anchors.contains(&Anchor::Bottom) { self.bottom = 0.0; }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Geometry {
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+}
+
+impl Geometry {
+    fn new(engine: &RmlEngine, node_id: &str) -> Self {
+        let mut geometry = Self {
+            x: engine.get_number_property_of_node(node_id, "x", 0.0),
+            y: engine.get_number_property_of_node(node_id, "y", 0.0),
+            width: engine.get_number_property_of_node(node_id, "width", 0.0),
+            height: engine.get_number_property_of_node(node_id, "height", 0.0),
+        };
+
+        // if the node is a text, and don't have a width or height, we need to measure its size
+        if let Some(node) = engine.get_node_by_id(node_id) {
+            if node.node_type == ItemTypeEnum::Text {
+                let text = engine.get_string_property_of_node(node_id, "text", String::new());
+                let font_size = engine.get_number_property_of_node(node_id, "font_size", 20.0);
+                
+                // mesure the text dimensions
+                let text_dimensions = measure_text(&text, None, font_size as u16, 1.0);
+                if geometry.width == 0.0 {
+                    geometry.width = text_dimensions.width;
+                }
+                if geometry.height == 0.0 {
+                    geometry.height = text_dimensions.height;
+                }
+            }
+        }
+
+        geometry
+    }
+
+    fn apply_anchors(&mut self, anchors: &[Anchor], parent_size: (f32, f32)) {
+        let (parent_width, parent_height) = parent_size;
+
+        for anchor in anchors {
+            match anchor {
+                Anchor::Top => self.y = 0.0,
+                Anchor::Bottom => self.y = parent_height - self.height,
+                Anchor::Left => self.x = 0.0,
+                Anchor::Right => self.x = parent_width - self.width,
+                Anchor::HorizontalCenter => self.x = (parent_width - self.width) / 2.0,
+                Anchor::VerticalCenter => self.y = (parent_height - self.height) / 2.0,
+                Anchor::Center => {
+                    self.x = (parent_width - self.width) / 2.0;
+                    self.y = (parent_height - self.height) / 2.0;
+                }
+                Anchor::Fill => {
+                    self.x = 0.0;
+                    self.y = 0.0;
+                    self.width = parent_width;
+                    self.height = parent_height;
+                }
+            }
+        }
+
+        // Gestion des cas spéciaux pour le remplissage
+        if anchors.contains(&Anchor::Top) && anchors.contains(&Anchor::Bottom) {
+            self.y = 0.0;
+            self.height = parent_height;
+        }
+        if anchors.contains(&Anchor::Left) && anchors.contains(&Anchor::Right) {
+            self.x = 0.0;
+            self.width = parent_width;
+        }
+    }
+
+    fn apply_margins(&mut self, margins: &Margins, anchors: &[Anchor], parent_pos: (f32, f32)) {
+        let (parent_x, parent_y) = parent_pos;
+        self.x = parent_x + self.x + margins.left - margins.right;
+        self.y = parent_y + self.y + margins.top - margins.bottom;
+
+        // fill special case; if fill is specified, also alter the width and height
+        if anchors.contains(&Anchor::Fill) {
+            self.x = parent_x + self.x + margins.left;
+            self.y = parent_y + self.y + margins.top;
+            self.width = self.width - margins.left - margins.right;
+            self.height = self.height - margins.top - margins.bottom;return;
+        }
+        
+    }
+}
+
+fn parse_anchors(anchor_string: &str) -> Vec<Anchor> {
+    anchor_string
+        .split("__")
+        .filter_map(|s| Anchor::from_str(s.trim()))
+        .collect()
+}
+
+fn get_parent_size(engine: &RmlEngine, node_id: &str) -> (f32, f32) {
+    match engine.get_parent_by_id(node_id) {
+        Some(parent) => {
+            let width = engine.get_number_property_of_node(&parent.id, "width", 0.0);
+            let height = engine.get_number_property_of_node(&parent.id, "height", 0.0);
+            (width, height)
+        }
+        None => (0.0, 0.0),
+    }
+}
+
+fn compute_geometry(engine: &RmlEngine, parent_pos: (f32, f32), node_id: &str) -> (f32, f32, f32, f32) {
+    let mut geometry = Geometry::new(engine, node_id);
+    let parent_size = get_parent_size(engine, node_id);
+    
+    let anchor_string = engine.get_string_property_of_node(node_id, "anchors", String::new());
+    let anchors = parse_anchors(&anchor_string);
+    geometry.apply_anchors(&anchors, parent_size);
+
+    let mut margins = Margins::new(engine, node_id);
+    margins.apply_anchor_constraints(&anchors);
+    geometry.apply_margins(&margins, &anchors,parent_pos);
+
+    (geometry.x, geometry.y, geometry.width, geometry.height)
+}
+
+fn draw_text_with_wrap(text: &str, x: f32, y: f32, max_width: f32, text_params: &TextParams) {
+    let font_size = text_params.font_size as f32;
+    
+    if max_width <= 0.0 {
+        // if there is no max width, just draw the text at the specified position
+        // adding the baseline offset to the y position because macroquad's draw_text_ex uses the baseline offset
+        let text_dims = measure_text(&text, None, font_size as u16, 1.0);
+        let baseline_offset = text_dims.offset_y; // macroquad fournit cet offset
+        let adjusted_y = y + baseline_offset;
+        draw_text_ex(text, x, adjusted_y, text_params.clone());
+        return;
+    }
+
+    let line_height = font_size * 1.2; // space between lines, TODO should be a default value or configurable
+    
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let mut lines = Vec::new();
+    let mut current_line = String::new();
+    
+    for word in words {
+        let test_line = if current_line.is_empty() {
+            word.to_string()
+        } else {
+            format!("{} {}", current_line, word)
+        };
+        
+        let test_width = measure_text(&test_line, None, text_params.font_size, 1.0).width;
+        
+        if test_width <= max_width {
+            current_line = test_line;
+        } else {
+            if !current_line.is_empty() {
+                lines.push(current_line.clone());
+                current_line = word.to_string();
+            } else {
+                // the word itself is too long, push it as a new line
+                // TODO handle this case better, maybe split the word or truncate it if some parameter is set
+                lines.push(word.to_string());
+            }
+        }
+    }
+    
+    if !current_line.is_empty() {
+        lines.push(current_line);
+    }
+    
+    // draw each line with the adjusted y position
+    for (i, line) in lines.iter().enumerate() {
+        let text_dims = measure_text(&text, None, font_size as u16, 1.0);
+        let baseline_offset = text_dims.offset_y; // macroquad fournit cet offset
+        let adjusted_y = y + baseline_offset + (i as f32 * line_height);
+        draw_text_ex(line, x, adjusted_y, text_params.clone());
+    }
+}
+
+pub fn draw_childs(engine: &mut RmlEngine, node_id: &str, parent_pos: (f32, f32)) {
+    // Get the node by its ID
+    let children_ids = engine.get_children_str_ids_by_id(node_id).unwrap_or_default();
+    if children_ids.is_empty() { return; }
+
+    // compute geometry for the node
+    for node_id in &children_ids {
+        let (x, y, width, height) = compute_geometry(engine, parent_pos, node_id);
+        let node_type = engine.get_node_type(node_id).unwrap_or(ItemTypeEnum::Node);
+        // render the node according to its type
+        match node_type {
+            ItemTypeEnum::Rectangle => {
+                let color = engine.get_color_property_of_node(node_id, "color", WHITE);
+                draw_rectangle(x, y, width, height, color);
+            }
+            ItemTypeEnum::Text => {
+                let text = engine.get_string_property_of_node(node_id, "text", String::new());
+                let color = engine.get_color_property_of_node(node_id, "color", WHITE);
+                let font_size = engine.get_number_property_of_node(node_id, "font_size", 20.0);
+
+                let text_dimensions = measure_text(&text, None, font_size as u16, 1.0);
+                engine.set_property_of_node(node_id, "implicit_width", text_dimensions.width.into());
+                engine.set_property_of_node(node_id, "implicit_height", text_dimensions.height.into());
+                
+                let text_params = TextParams {
                     font_size: font_size as u16,
                     color,
                     ..Default::default()
-                });
+                };
+
+                draw_text_with_wrap(&text, x, y, width, &text_params);
             }
+            _ => {} // Autres types
         }
 
-        // it seems that the order of the childrens can be different between launch
-        for node in childs {
-            // Draw the children of the node
-            let x = childs_computed_x.pop_front().unwrap();
-            let y = childs_computed_y.pop_front().unwrap();
-            draw_childs(engine, node.id.as_str(), x, y);
-        }
+        draw_childs(engine, node_id, (x, y));
     }
 }
-
-
