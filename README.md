@@ -58,7 +58,7 @@ let mut engine = rml!(
 );
 ```
 
-## Result
+## Result example  (main example)
 ![example result](rml_example/example_smile.png)
 
 ## Current Status: Unstable
@@ -67,19 +67,19 @@ This project is under active experimentation.
 
 ## Current Features
 
-* ✅ Simple DSL with Rectangle and Text nodes
+* Simple DSL with Rectangle and Text nodes ✅
 
-* ✅ Supports property types: Number, Bool, String, Vec
+* Supports property types: Number, Bool, String, Vec ✅
 
-* ✅ Core engine for node arena, event system, properties, and callbacks
+* Core engine for node arena, event system, properties, and callbacks ✅
 
-* ✅ Callbacks, functions, and initial values can be defined in Rust directly in the DSL
+* Callbacks, functions, and initial values can be defined in Rust directly in the DSL ✅
 
-* ✅ Basic anchor system
+* Basic anchor system ✅
 
-* ✅ Rendering with macroquad
+* Rendering with macroquad ✅
 
-* ✅ Lightweight and easy to extend
+* Lightweight and easy to extend ✅
 
 ## Planned Features / TODO
 
@@ -89,9 +89,9 @@ This project is under active experimentation.
 
 * System events:
 
-    * Keyboard & mouse input
+    * Keyboard & mouse input ✅
 
-    * Window events
+    * Window events ✅
 
     * Custom event definitions
 
