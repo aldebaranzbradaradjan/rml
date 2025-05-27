@@ -155,17 +155,17 @@ impl Geometry {
 
     fn apply_margins(&mut self, margins: &Margins, anchors: &[Anchor], parent_pos: (f32, f32)) {
         let (parent_x, parent_y) = parent_pos;
-        self.x = parent_x + self.x + margins.left - margins.right;
-        self.y = parent_y + self.y + margins.top - margins.bottom;
-
+        
         // fill special case; if fill is specified, also alter the width and height
         if anchors.contains(&Anchor::Fill) {
             self.x = parent_x + self.x + margins.left;
             self.y = parent_y + self.y + margins.top;
             self.width = self.width - margins.left - margins.right;
-            self.height = self.height - margins.top - margins.bottom;return;
+            self.height = self.height - margins.top - margins.bottom;
+        } else {
+            self.x = parent_x + self.x + margins.left - margins.right;
+            self.y = parent_y + self.y + margins.top - margins.bottom;
         }
-        
     }
 }
 
@@ -197,7 +197,7 @@ fn compute_geometry(engine: &RmlEngine, parent_pos: (f32, f32), node_id: &str) -
 
     let mut margins = Margins::new(engine, node_id);
     margins.apply_anchor_constraints(&anchors);
-    geometry.apply_margins(&margins, &anchors,parent_pos);
+    geometry.apply_margins(&margins, &anchors, parent_pos);
 
     (geometry.x, geometry.y, geometry.width, geometry.height)
 }
@@ -265,6 +265,19 @@ pub fn draw_childs(engine: &mut RmlEngine, node_id: &str, parent_pos: (f32, f32)
     // compute geometry for the node
     for node_id in &children_ids {
         let (x, y, width, height) = compute_geometry(engine, parent_pos, node_id);
+        
+        // Store computed geometry in node properties for event system reuse
+        // x, y are already absolute coordinates (computed_geometry includes parent_pos)
+        engine.set_property_of_node(node_id, "computed_absolute_x", crate::AbstractValue::Number(x));
+        engine.set_property_of_node(node_id, "computed_absolute_y", crate::AbstractValue::Number(y));
+        engine.set_property_of_node(node_id, "computed_width", crate::AbstractValue::Number(width));
+        engine.set_property_of_node(node_id, "computed_height", crate::AbstractValue::Number(height));
+        
+        let visible = engine.get_bool_property_of_node(node_id, "visible", true);
+        if !visible {
+            continue; // skip drawing if the node is not visible
+        }
+        
         let node_type = engine.get_node_type(node_id).unwrap_or(ItemTypeEnum::Node);
         // render the node according to its type
         match node_type {
@@ -289,7 +302,16 @@ pub fn draw_childs(engine: &mut RmlEngine, node_id: &str, parent_pos: (f32, f32)
 
                 draw_text_with_wrap(&text, x, y, width, &text_params);
             }
-            _ => {} // Autres types
+            ItemTypeEnum::MouseArea => {
+                // MouseArea is invisible by default, but can have a debug color
+                let debug = engine.get_bool_property_of_node(node_id, "debug", false);
+                if debug {
+                    let debug_color = engine.get_color_property_of_node(node_id, "debug_color", 
+                        Color::from_rgba(255, 0, 0, 50)); // Semi-transparent red
+                    draw_rectangle(x, y, width, height, debug_color);
+                }
+            }
+            _ => {} // Node type and others
         }
 
         draw_childs(engine, node_id, (x, y));

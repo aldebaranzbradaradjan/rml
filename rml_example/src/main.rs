@@ -346,8 +346,12 @@ async fn main() {
 
 
     loop {
+        // Process system events (keyboard, mouse, window)
+        engine.process_system_events();
+        
+        // Legacy keyboard handling (you can remove this if you prefer using events)
         let mut x = engine.get_number_property_of_node("outer_rect", "x", 0.0);
-        let mut y = engine.get_property_of_node("outer_rect", "y", 0.0, |v| v.to_number().map(|n| n as f32)); //ps.get_number_property_of_node(node.id.as_str(), "y", 0.0);
+        let mut y = engine.get_property_of_node("outer_rect", "y", 0.0, |v| v.to_number().map(|n| n as f32));
 
         if is_key_down(KeyCode::Right) {
             x += 1.0;

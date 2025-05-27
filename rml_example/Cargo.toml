@@ -3,6 +3,14 @@ name = "rml_example"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "main"
+path = "src/main.rs"
+
+[[bin]]
+name = "mousearea_test"
+path = "src/mousearea_test.rs"
+
 [dependencies]
 rml_core = { path = "../rml_core" }
 rml_macros = { path = "../rml_macros" }

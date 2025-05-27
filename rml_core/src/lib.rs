@@ -2,10 +2,12 @@
 pub mod properties;
 pub mod arena;
 pub mod draw;
+pub mod events;
 
 use arena::ArenaNodeId;
 pub use arena::{ArenaNode, ArenaTree, NodeId, PropertyMap, PropertyName, ItemTypeEnum};
 pub use properties::{AbstractValue, Property};
+pub use events::{SystemEvent, EventType, EventManager};
 
 use std::{collections::{HashMap}, sync::{Arc}};
 use macroquad::color::Color;
@@ -72,6 +74,94 @@ macro_rules! set_color {
     }};
 }
 
+#[macro_export]
+macro_rules! get_computed_x {
+    ($engine:expr, $node:ident) => {{
+        $engine.get_number_property_of_node(stringify!($node), "computed_absolute_x", 0.0)
+    }};
+}
+
+#[macro_export]
+macro_rules! get_computed_y {
+    ($engine:expr, $node:ident) => {{
+        $engine.get_number_property_of_node(stringify!($node), "computed_absolute_y", 0.0)
+    }};
+}
+
+#[macro_export]
+macro_rules! get_computed_absolute_x {
+    ($engine:expr, $node:ident) => {{
+        $engine.get_number_property_of_node(stringify!($node), "computed_absolute_x", 0.0)
+    }};
+}
+
+#[macro_export]
+macro_rules! get_computed_absolute_y {
+    ($engine:expr, $node:ident) => {{
+        $engine.get_number_property_of_node(stringify!($node), "computed_absolute_y", 0.0)
+    }};
+}
+
+#[macro_export]
+macro_rules! get_computed_width {
+    ($engine:expr, $node:ident) => {{
+        $engine.get_number_property_of_node(stringify!($node), "computed_width", 0.0)
+    }};
+}
+
+#[macro_export]
+macro_rules! get_computed_height {
+    ($engine:expr, $node:ident) => {{
+        $engine.get_number_property_of_node(stringify!($node), "computed_height", 0.0)
+    }};
+}
+
+#[macro_export]
+macro_rules! get_mouse_wheel_delta_x {
+    ($engine:expr) => {{
+        if let Some(SystemEvent::MouseWheel { delta_x, .. }) = &$engine.current_event {
+            *delta_x
+        } else {
+            0.0
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! get_mouse_wheel_delta_y {
+    ($engine:expr) => {{
+        if let Some(SystemEvent::MouseWheel { delta_y, .. }) = &$engine.current_event {
+            *delta_y
+        } else {
+            0.0
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! get_mouse_event_pos {
+    ($engine:expr) => {{
+        match &$engine.current_event {
+            Some(SystemEvent::MouseDown { x, y, .. }) |
+            Some(SystemEvent::MouseUp { x, y, .. }) |
+            Some(SystemEvent::Click { x, y, .. }) => (*x, *y),
+            _ => $engine.get_mouse_position()
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! get_key_event {
+    ($engine:expr) => {{
+        match &$engine.current_event {
+            Some(SystemEvent::KeyDown { key }) |
+            Some(SystemEvent::KeyUp { key }) |
+            Some(SystemEvent::KeyPressed { key }) => Some(*key),
+            _ => None
+        }
+    }};
+}
+
 pub struct RmlEngine {
     arena: ArenaTree,
     properties: HashMap<PropertyId, Property>,
@@ -79,6 +169,9 @@ pub struct RmlEngine {
     callbacks: HashMap<CallbackId, Callback>,
     bindings: HashMap<PropertyId, Vec<CallbackId>>,
     callbacks_to_eval: Vec<CallbackId>,
+    
+    event_manager: EventManager,
+    pub current_event: Option<SystemEvent>,
 }
 
 impl RmlEngine {
@@ -89,6 +182,8 @@ impl RmlEngine {
             callbacks: HashMap::new(),
             bindings: HashMap::new(),
             callbacks_to_eval: Vec::new(),
+            event_manager: EventManager::new(),
+            current_event: None,
         }
     }
 
@@ -335,6 +430,178 @@ impl RmlEngine {
 
     pub fn get_node_type(&self, node_id: &str) -> Option<ItemTypeEnum> {
         self.arena.get_node_by_id(node_id).map(|node| node.node_type.clone())
+    }
+
+    // Event system methods
+    pub fn add_event_handler(&mut self, event_type: EventType, node_id_str: &str, callback_id: CallbackId) {
+        if let Some(node_id) = self.get_node_id(node_id_str) {
+            self.event_manager.add_event_handler(event_type, node_id, callback_id);
+        }
+    }
+    
+    pub fn get_event_manager(&self) -> &EventManager {
+        &self.event_manager
+    }
+    
+    pub fn get_event_manager_mut(&mut self) -> &mut EventManager {
+        &mut self.event_manager
+    }
+    
+    pub fn set_focused_node(&mut self, node_id_str: Option<&str>) {
+        let node_id = node_id_str.and_then(|id| self.get_node_id(id));
+        self.event_manager.set_focused_node(node_id);
+    }
+    
+    pub fn process_events(&mut self) -> Vec<SystemEvent> {
+        // Update from macroquad input
+        let mut events = self.event_manager.update_from_macroquad();
+        
+        // Check for mouse hover changes (this requires geometry calculation)
+        let hovered_nodes = self.get_nodes_under_mouse();
+        let hover_events = self.event_manager.update_hovered_nodes(hovered_nodes);
+        events.extend(hover_events);
+        
+        // Process each event and trigger callbacks immediately
+        for event in &events {
+            self.handle_system_event(event);
+        }
+        
+        // Still run any property change callbacks that might have been triggered
+        self.run_callbacks();
+        
+        events
+    }
+    
+    fn handle_system_event(&mut self, event: &SystemEvent) {
+        let event_type = event.event_type();
+        let mut callbacks_with_event = Vec::new();
+        
+        match event {
+            // Global events (not node-specific)
+            SystemEvent::KeyDown { .. } | SystemEvent::KeyUp { .. } | SystemEvent::KeyPressed { .. } => {
+                // Send to focused node if any
+                if let Some(focused_node) = self.event_manager.get_focused_node() {
+                    let handlers = self.event_manager.get_handlers_for_node(focused_node, &event_type);
+                    for handler in handlers {
+                        callbacks_with_event.push((handler.callback_id, event.clone()));
+                    }
+                }
+                
+                // Also send to global handlers
+                let global_handlers = self.event_manager.get_handlers_for_event(&event_type);
+                for handler in global_handlers {
+                    callbacks_with_event.push((handler.callback_id, event.clone()));
+                }
+            }
+            
+            // Mouse events with position - check which nodes are affected
+            SystemEvent::MouseDown { x, y, .. } | SystemEvent::MouseUp { x, y, .. } | SystemEvent::Click { x, y, .. } => {
+                let affected_nodes = self.get_nodes_at_position(*x, *y);
+                for node_id in affected_nodes {
+                    let handlers = self.event_manager.get_handlers_for_node(node_id, &event_type);
+                    for handler in handlers {
+                        callbacks_with_event.push((handler.callback_id, event.clone()));
+                    }
+                }
+            }
+            
+            // Mouse wheel - check which nodes are under current mouse position
+            SystemEvent::MouseWheel { .. } => {
+                let mouse_pos = self.event_manager.get_mouse_position();
+                let affected_nodes = self.get_nodes_at_position(mouse_pos.0, mouse_pos.1);
+                for node_id in affected_nodes {
+                    let handlers = self.event_manager.get_handlers_for_node(node_id, &event_type);
+                    for handler in handlers {
+                        callbacks_with_event.push((handler.callback_id, event.clone()));
+                    }
+                }
+            }
+            
+            // Mouse move - check all MouseArea nodes that have mouse move handlers
+            SystemEvent::MouseMove { .. } => {
+                // For mouse move, we trigger all MouseArea handlers regardless of position
+                // This is useful for drag operations that may go outside the original area
+                for (_, &node_id) in &self.arena.id_to_node_id {
+                    if let Some(node) = self.arena.get_node(node_id) {
+                        if node.node_type == ItemTypeEnum::MouseArea {
+                            let handlers = self.event_manager.get_handlers_for_node(node_id, &event_type);
+                            for handler in handlers {
+                                callbacks_with_event.push((handler.callback_id, event.clone()));
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Node-specific events
+            SystemEvent::MouseEnter { node_id } | SystemEvent::MouseLeave { node_id } => {
+                let handlers = self.event_manager.get_handlers_for_node(*node_id, &event_type);
+                for handler in handlers {
+                    callbacks_with_event.push((handler.callback_id, event.clone()));
+                }
+            }
+            
+            // Window events (global)
+            SystemEvent::WindowResize { .. } | SystemEvent::WindowFocus | SystemEvent::WindowLostFocus => {
+                let global_handlers = self.event_manager.get_handlers_for_event(&event_type);
+                for handler in global_handlers {
+                    callbacks_with_event.push((handler.callback_id, event.clone()));
+                }
+            }
+        }
+        
+        // Execute callbacks immediately with their specific event (at the difference of other events that are processed in process_events)
+        for (callback_id, event) in callbacks_with_event {
+            if let Some(callback) = self.callbacks.get(&callback_id).cloned() {
+                // Set the specific event for this callback
+                self.current_event = Some(event);
+                callback(self);
+                // Clear immediately after callback execution
+                self.current_event = None;
+            }
+        }
+    }
+    
+    fn get_nodes_under_mouse(&self) -> std::collections::HashSet<NodeId> {
+        let mouse_pos = self.event_manager.get_mouse_position();
+        self.get_nodes_at_position(mouse_pos.0, mouse_pos.1).into_iter().collect()
+    }
+    
+    fn get_nodes_at_position(&self, x: f32, y: f32) -> Vec<NodeId> {
+        let mut nodes = Vec::new();
+        
+        // Only check MouseArea nodes for mouse events
+        for (_, &node_id) in &self.arena.id_to_node_id {
+            if let Some(node) = self.arena.get_node(node_id) {
+                if node.node_type == ItemTypeEnum::MouseArea {
+                    if self.is_point_inside_node(node_id, x, y) {
+                        nodes.push(node_id);
+                    }
+                }
+            }
+        }
+        
+        nodes
+    }
+    
+    fn is_point_inside_node(&self, node_id: NodeId, x: f32, y: f32) -> bool {
+        // Use pre-computed absolute geometry from draw phase
+        if let Some(node) = self.arena.get_node(node_id) {
+            let computed_abs_x = self.get_number_property_of_node(&node.id, "computed_absolute_x", 0.0);
+            let computed_abs_y = self.get_number_property_of_node(&node.id, "computed_absolute_y", 0.0);
+            let computed_width = self.get_number_property_of_node(&node.id, "computed_width", 0.0);
+            let computed_height = self.get_number_property_of_node(&node.id, "computed_height", 0.0);
+            
+            // Now we can directly compare with mouse coordinates (both in window coordinates)
+            x >= computed_abs_x && x <= computed_abs_x + computed_width && 
+            y >= computed_abs_y && y <= computed_abs_y + computed_height
+        } else {
+            false
+        }
+    }
+
+    pub fn get_mouse_position(&self) -> (f32, f32) {
+        self.event_manager.get_mouse_position()
     }
 
 }

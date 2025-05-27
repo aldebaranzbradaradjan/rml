@@ -7,7 +7,7 @@ use syn::{parse_macro_input, Ident, Lit, Token, Expr, File, Item, ExprCall, Expr
 
 use uuid::Uuid;
 
-use rml_core::{AbstractValue, ItemTypeEnum, Property, RmlEngine};
+use rml_core::{AbstractValue, ItemTypeEnum, Property, RmlEngine, EventType};
 
 use std::process::{Command, Stdio};
 
@@ -262,7 +262,7 @@ fn property_parse(content: &ParseBuffer) -> Result<Value, syn::Error> {
         value = Value::Lit(content.parse()?);
     } else if content.peek(Ident) {
         if content.peek(Ident) && content.peek2(Token![|]) {
-            // gestion des valeurs composées avec |
+            // handle composed values with |
             let mut composed_value = String::new();
             while !content.peek(Token![|]) {
                 let ident: Ident = content.parse()?;
@@ -369,6 +369,7 @@ impl RmlNode {
             "Node" => ItemTypeEnum::Node,
             "Rectangle" => ItemTypeEnum::Rectangle,
             "Text" => ItemTypeEnum::Text,
+            "MouseArea" => ItemTypeEnum::MouseArea,
             _ => panic!("Unknown node type: {}", node_type),
         };
         
@@ -411,7 +412,6 @@ impl RmlNode {
             .map(|(_, _, _, initializer)| initializer.clone())
             .collect();
 
-        // Adaptation pour PropertyKey dans les initializers
         let initializer: Vec<proc_macro2::TokenStream> = self
             .properties
             .iter()
@@ -480,11 +480,52 @@ impl RmlNode {
                 let k_ident = k.to_ident();
                 
                 if k_string.starts_with("on_") && k_string.ends_with("_changed") {
+                    // Property change callbacks (existing functionality)
                     let observed = k_string.trim_start_matches("on_").trim_end_matches("_changed");
                     if let Value::Block(block) = v {
                         quote! {
                             let cb_id = engine.add_callback( |engine| #block );
                             engine.bind_node_property_to_callback( #id, #observed, cb_id );
+                        }
+                    } else {
+                        quote! {}
+                    }
+                } else if k_string.starts_with("on_") {
+                    // System event handlers
+                    let event_name = k_string.trim_start_matches("on_");
+                    
+                    // Check if this is a mouse event and if we're in a MouseArea
+                    let is_mouse_event = matches!(event_name, 
+                        "mouse_down" | "mouse_up" | "mouse_move" | "mouse_wheel" | 
+                        "mouse_enter" | "mouse_leave" | "click"
+                    );
+                    
+                    if is_mouse_event && node_type != ItemTypeEnum::MouseArea {
+                        // Mouse events are only allowed on MouseArea nodes
+                        panic!("Mouse events can only be used in MouseArea nodes");
+                    }
+                    
+                    let event_type = match event_name {
+                        "key_down" => quote! { EventType::KeyDown },
+                        "key_up" => quote! { EventType::KeyUp },
+                        "key_pressed" => quote! { EventType::KeyPressed },
+                        "mouse_down" => quote! { EventType::MouseDown },
+                        "mouse_up" => quote! { EventType::MouseUp },
+                        "mouse_move" => quote! { EventType::MouseMove },
+                        "mouse_wheel" => quote! { EventType::MouseWheel },
+                        "mouse_enter" => quote! { EventType::MouseEnter },
+                        "mouse_leave" => quote! { EventType::MouseLeave },
+                        "click" => quote! { EventType::Click },
+                        "window_resize" => quote! { EventType::WindowResize },
+                        "window_focus" => quote! { EventType::WindowFocus },
+                        "window_lost_focus" => quote! { EventType::WindowLostFocus },
+                        _ => return quote! {}, // Unknown event type
+                    };
+                    
+                    if let Value::Block(block) = v {
+                        quote! {
+                            let cb_id = engine.add_callback( |engine| #block );
+                            engine.add_event_handler( #event_type, #id, cb_id );
                         }
                     } else {
                         quote! {}
@@ -516,6 +557,20 @@ impl RmlNode {
                 #node_type,
                 HashMap::new(),
             ).unwrap();
+
+            // create computed geometry properties for all nodes
+            let computed_abs_x_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
+            engine.add_property_to_node(#temp_node, "computed_absolute_x".to_string(), computed_abs_x_prop);
+            let computed_abs_y_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
+            engine.add_property_to_node(#temp_node, "computed_absolute_y".to_string(), computed_abs_y_prop);
+            let computed_width_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
+            engine.add_property_to_node(#temp_node, "computed_width".to_string(), computed_width_prop);
+            let computed_height_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
+            engine.add_property_to_node(#temp_node, "computed_height".to_string(), computed_height_prop);
+
+            // create a visible property for all nodes
+            let visible_prop = engine.add_property(Property::new(AbstractValue::Bool(true)));
+            engine.add_property_to_node(#temp_node, "visible".to_string(), visible_prop);
 
             #(#properties)*
 
