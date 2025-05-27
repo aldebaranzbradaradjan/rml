@@ -1,8 +1,9 @@
-# rml
-A basic QML like toolkit in Rust
+# RML – Rustic Markup Language
+A lightweight QML-like toolkit written in Rust
 
-## Why
-This project is a small playground for testing ideas and learning. It's not intended for production use.
+## Why?
+This project is a small playground to experiment with ideas and learn.
+Not intended for production use — just have fun!
 
 ## Example
 ```rust
@@ -12,15 +13,15 @@ let mut engine = rml!(
         width: 500.0
         height: 500.0
 
-        // a rectangle anchored to fill the root node
+        // A rectangle anchored to fill the root node
         Rectangle {
             width: 10
             height: 10
             anchors: fill
             color: "rgba(1.0, 0.0, 0.0, 0.3)"
         }
-        
-        // a rectangle anchored to fill the root node, but with margins
+
+        // Same, but with margins
         Rectangle {
             width: 10
             height: 10
@@ -29,7 +30,7 @@ let mut engine = rml!(
             color: "rgba(0.0, 1.0, 0.0, 0.3)"
         }
 
-        // a rectangle anchored in top left corner of the root node
+        // Top-left corner
         Rectangle {
             width: 10
             height: 10
@@ -37,7 +38,7 @@ let mut engine = rml!(
             color: "rgba(0.0, 1.0, 0.0, 1.0)"
         }
 
-        // a rectangle anchored in top right corner of the root node
+        // Top-right corner
         Rectangle {
             width: 10
             height: 10
@@ -45,62 +46,76 @@ let mut engine = rml!(
             color: "rgba(0.0, 0.0, 1.0, 1.0)"
         }
 
-        ...
-
-        // check example to the full code
-
-        ...
-
-
-                Rectangle {
-                    anchors: left | right | bottom
-                    bottom_margin: 10
-                    width: 10
-                    height: 10
-                    color: "rgba(1., 0., 0., 1.0)"
-                }
-            }
+        // Bottom bar
+        Rectangle {
+            anchors: left | right | bottom
+            bottom_margin: 10
+            width: 10
+            height: 10
+            color: "rgba(1.0, 0.0, 0.0, 1.0)"
         }
     }
 );
 ```
-### Result
+
+## Result
 ![example result](rml_example/example_smile.png)
 
-## Current state: Unstable
-Code may be incomplete, buggy, or broken. Use at your own risk!
+## Current Status: Unstable
+This project is under active experimentation.
+⚠️ Code may be incomplete, buggy, or broken — use at your own risk!
 
-### Existing
-* A simple DSL supporting Rectangle and Text nodes
-* Manages properties of the following types: Number, Bool, String, Vec
-* A core engine that handles the node arena, event system, properties, and callbacks
-* Allows defining callbacks, functions, and initial values in Rust directly within the DSL
-* Basic anchoring system
-* Rendering powered by macroquad
-* Designed to be simple, easy to extend, and modify
+## Current Features
 
-### Todo
-* Renamed from RML to CML (Cute Markup Language) for a lighter, more playful tone
-* Support for loading multiple files (e.g., component definitions in separate files)
-* System event handling:
-    * Keyboard and mouse input
-    * Window-level events
-    * Ability to define and dispatch custom events
+* ✅ Simple DSL with Rectangle and Text nodes
+
+* ✅ Supports property types: Number, Bool, String, Vec
+
+* ✅ Core engine for node arena, event system, properties, and callbacks
+
+* ✅ Callbacks, functions, and initial values can be defined in Rust directly in the DSL
+
+* ✅ Basic anchor system
+
+* ✅ Rendering with macroquad
+
+* ✅ Lightweight and easy to extend
+
+## Planned Features / TODO
+
+* Rename to CML (Cute Markup Language) — a more playful alternative to RML
+
+* Load multiple files (e.g., external components)
+
+* System events:
+
+    * Keyboard & mouse input
+
+    * Window events
+
+    * Custom event definitions
+
 * Resource system:
-    * Simple way to declare and include assets (e.g., images, fonts) from a specified folder
-    * Assets can be bundled and shipped with the executable
-* (Optional) ID scoping: Limit ID visibility to their respective files to prevent conflicts
-* Positioning widgets:
-    * Support for layout primitives: Column, Row, Grid
-    * Fully compatible with anchors
-* Layout system:
-    * Coordinate positioning with layout primitives (Column, Row, Grid)
-    * Integrates cleanly with the anchoring system
+
+    * Declare and include assets (e.g., images, fonts) from a folder
+
+    * Bundle with executable
+
+* Optional scoped IDs: isolate ID usage per file
+
+* Layout & positioning:
+
+    * Positioning items: Column, Row, Grid
+
+    * Fully compatible with anchors and the layout system
+
 * Data models:
-    * Declarative macros for ListModel, TableModel based on Rust structs
-    * Support for passing fields, sorting, and filtering
+
+    * ListModel, TableModel via declarative Rust macros
+
+    * Support for field access, sorting, and filtering
 
 ## License
-It's MIT.
 
-That's it!
+Licensed under the MIT License.
+Feel free to use, modify, and play around!
