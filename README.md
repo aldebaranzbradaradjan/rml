@@ -67,7 +67,7 @@ This project is under active experimentation.
 
 ## Current Features
 
-* Simple DSL with Rectangle and Text nodes ✅
+* Simple DSL with Rectangle, Text, MouseArea nodes ✅
 
 * Supports property types: Number, Bool, String, Vec ✅
 
@@ -91,9 +91,11 @@ This project is under active experimentation.
 
     * Keyboard & mouse input ✅
 
-    * Window events ✅
+    * Window events 
 
     * Custom event definitions
+
+* Implement rapid setter / getter $ macro ( $.draggable.x = new_x; )
 
 * Resource system:
 

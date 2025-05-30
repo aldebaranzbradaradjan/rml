@@ -187,8 +187,8 @@ async fn main() {
                 }
 
                 on_key_down: {
-                    let mut x = engine.get_number_property_of_node("outer_rect", "x", 0.0);
-                    let mut y = engine.get_number_property_of_node("outer_rect", "y", 0.0);
+                    let mut x = get_number!(engine, outer_rect, x);
+                    let mut y = get_number!(engine, outer_rect, y);
 
                     if is_key_down(KeyCode::Right) {
                         x += 1.0;
@@ -203,8 +203,8 @@ async fn main() {
                         y -= 1.0;
                     }
 
-                    engine.set_property_of_node("outer_rect", "x", AbstractValue::Number(x));
-                    engine.set_property_of_node("outer_rect", "y", AbstractValue::Number(y));
+                    set_number!(engine, outer_rect, x, x);
+                    set_number!(engine, outer_rect, y, y);
                 }
 
                 width: 200
@@ -352,20 +352,7 @@ async fn main() {
         }
     );
 
-    // {
-    //     // Demonstration of callbacks and bindings directly in rust code
-    //     let cb_id = engine.add_callback(|engine| {
-    //         let top_bar_x = engine.get_number_property_of_node("top_bar", "x", 0.0);
-    //         let top_bar_width = engine.get_number_property_of_node("top_bar", "x", 0.0);
-    //         engine.set_property_of_node("bottom_bar", "x", AbstractValue::Number(top_bar_x + (top_bar_width / 2.0)));
-    //     });
-    //     engine.bind_node_property_to_callback( "top_bar", "x", cb_id);
-    // }
-
     println!("node from macro:\n {:#?}", engine.get_arena());
-
-    // set macroquad window size
-
 
     loop {
         engine.process_events();

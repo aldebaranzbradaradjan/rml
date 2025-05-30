@@ -255,11 +255,8 @@ async fn main() {
 
     loop {
         let _events = engine.process_events();
-        //engine.run_callbacks();
-
         clear_background(BLACK);
         rml_core::draw::draw_childs(&mut engine, "root", (0., 0.));
-        
         next_frame().await;
     }
 }
