@@ -11,7 +11,7 @@ pub type NodeId = usize;
 
 #[derive(Debug)]
 pub struct ArenaTree {
-    nodes: Vec<ArenaNode>,
+    pub nodes: Vec<ArenaNode>,
     pub id_to_node_id: HashMap<ArenaNodeId, NodeId>,
 }
 

@@ -79,7 +79,7 @@ pub struct EventManager {
     mouse_buttons_pressed: HashSet<MouseButton>,
     
     // Nodes currently under mouse cursor
-    hovered_nodes: HashSet<NodeId>,
+    pub hovered_nodes: Vec<NodeId>,
     
     // Focused node for keyboard events
     focused_node: Option<NodeId>,
@@ -95,7 +95,7 @@ impl EventManager {
             mouse_position: (0.0, 0.0),
             previous_mouse_position: (0.0, 0.0),
             mouse_buttons_pressed: HashSet::new(),
-            hovered_nodes: HashSet::new(),
+            hovered_nodes: Vec::new(),
             focused_node: None,
             window_size: (800.0, 600.0),
         }
@@ -110,13 +110,13 @@ impl EventManager {
         self.handlers.push(handler);
     }
     
-    pub fn remove_node_handlers(&mut self, node_id: NodeId) {
-        self.handlers.retain(|h| h.node_id != node_id);
-        self.hovered_nodes.remove(&node_id);
-        if self.focused_node == Some(node_id) {
-            self.focused_node = None;
-        }
-    }
+    // pub fn remove_node_handlers(&mut self, node_id: NodeId) {
+    //     self.handlers.retain(|h| h.node_id != node_id);
+    //     self.hovered_nodes.remove(&node_id);
+    //     if self.focused_node == Some(node_id) {
+    //         self.focused_node = None;
+    //     }
+    // }
     
     pub fn set_focused_node(&mut self, node_id: Option<NodeId>) {
         self.focused_node = node_id;
@@ -136,27 +136,6 @@ impl EventManager {
     
     pub fn is_node_hovered(&self, node_id: NodeId) -> bool {
         self.hovered_nodes.contains(&node_id)
-    }
-    
-    pub fn update_hovered_nodes(&mut self, nodes: HashSet<NodeId>) -> Vec<SystemEvent> {
-        let mut events = Vec::new();
-        
-        // Find nodes that are no longer hovered
-        for &node_id in &self.hovered_nodes {
-            if !nodes.contains(&node_id) {
-                events.push(SystemEvent::MouseLeave { node_id });
-            }
-        }
-        
-        // Find newly hovered nodes
-        for &node_id in &nodes {
-            if !self.hovered_nodes.contains(&node_id) {
-                events.push(SystemEvent::MouseEnter { node_id });
-            }
-        }
-        
-        self.hovered_nodes = nodes;
-        events
     }
     
     pub fn get_handlers_for_event(&self, event_type: &EventType) -> Vec<&EventHandler> {

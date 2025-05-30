@@ -3,7 +3,7 @@
 use macroquad::prelude::*;
 
 use std::collections::HashMap;
-use rml_core::{ RmlEngine, Property, AbstractValue, get_number, set_number, get_string, set_string, get_bool, set_bool, get_computed_absolute_x, get_computed_absolute_y, get_computed_width, get_computed_height, ItemTypeEnum, EventType, SystemEvent, get_mouse_wheel_delta_x, get_mouse_wheel_delta_y, get_mouse_event_pos, get_key_event};
+use rml_core::{ RmlEngine, Property, AbstractValue, consume_current_event, get_number, set_number, get_string, set_string, get_bool, set_bool, get_computed_absolute_x, get_computed_absolute_y, get_computed_width, get_computed_height, ItemTypeEnum, EventType, SystemEvent, get_mouse_wheel_delta_x, get_mouse_wheel_delta_y, get_mouse_event_pos, get_key_event};
 use rml_macros::rml;
 
 fn window_conf() -> Conf {
@@ -114,6 +114,7 @@ async fn main() {
                 MouseArea {
                     id: drag_area
                     anchors: fill
+                    consume_mouse_enter: true
                     
                     on_mouse_down: {
                         println!("Drag started");
@@ -137,6 +138,10 @@ async fn main() {
                             
                             set_number!(engine, draggable, x, new_x);
                             set_number!(engine, draggable, y, new_y);
+
+                            // todo add this syntax to rml_macros
+                            // $.draggable.x = new_x;
+                            // $.draggable.y = new_y;
                         }
                     }
 

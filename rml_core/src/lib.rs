@@ -117,6 +117,13 @@ macro_rules! get_computed_height {
 }
 
 #[macro_export]
+macro_rules! consume_current_event {
+    ($engine:expr) => {{
+        $engine.current_event_consumed = true;
+    }};
+}
+
+#[macro_export]
 macro_rules! get_mouse_wheel_delta_x {
     ($engine:expr) => {{
         if let Some(SystemEvent::MouseWheel { delta_x, .. }) = &$engine.current_event {
@@ -172,6 +179,7 @@ pub struct RmlEngine {
     
     event_manager: EventManager,
     pub current_event: Option<SystemEvent>,
+    pub current_event_consumed: bool,
 }
 
 impl RmlEngine {
@@ -184,6 +192,7 @@ impl RmlEngine {
             callbacks_to_eval: Vec::new(),
             event_manager: EventManager::new(),
             current_event: None,
+            current_event_consumed: false,
         }
     }
 
@@ -454,19 +463,51 @@ impl RmlEngine {
     
     pub fn process_events(&mut self) -> Vec<SystemEvent> {
         // Update from macroquad input
-        let mut events = self.event_manager.update_from_macroquad();
-        
-        // Check for mouse hover changes (this requires geometry calculation)
-        let hovered_nodes = self.get_nodes_under_mouse();
-        let hover_events = self.event_manager.update_hovered_nodes(hovered_nodes);
-        events.extend(hover_events);
-        
+        let events = self.event_manager.update_from_macroquad();
         // Process each event and trigger callbacks immediately
         for event in &events {
             self.handle_system_event(event);
         }
+
+        // Handle mouse enter and leave events
+        // Check for nodes that are currently hovered
+        let hovered_nodes = self.get_nodes_under_mouse();
+        let mut current_hovered_nodes = Vec::new();
+        self.current_event_consumed = false;
+
+        for node in hovered_nodes {
+            current_hovered_nodes.push(node);
+            if !self.event_manager.is_node_hovered(node) && !self.current_event_consumed {
+                // If the node is not hovered, we trigger MouseEnter
+                self.handle_system_event(&SystemEvent::MouseEnter { node_id: node });
+            }
+            if let Some(consume_mouse_enter) = self.get_property_by_name(node, "consume_mouse_enter") {
+                self.current_event_consumed = consume_mouse_enter.get().to_bool().unwrap_or(false);
+                if self.current_event_consumed { break; }
+            }
+        }
+        // Check for nodes that are no longer hovered
+        let previously_hovered_nodes = self.event_manager.hovered_nodes.clone();
+        self.current_event_consumed = false;
+
+        for &node_id in &previously_hovered_nodes {
+            if !current_hovered_nodes.contains(&node_id) && !self.current_event_consumed {
+                // If the node was previously hovered but is no longer, trigger MouseLeave
+                self.handle_system_event(&SystemEvent::MouseLeave { node_id });
+                if let Some(consume_mouse_enter) = self.get_property_by_name(node_id, "consume_mouse_leave") {
+                    self.current_event_consumed = consume_mouse_enter.get().to_bool().unwrap_or(false);
+                }
+            }
+            if let Some(consume_mouse_enter) = self.get_property_by_name(node_id, "consume_mouse_enter") {
+                self.current_event_consumed = consume_mouse_enter.get().to_bool().unwrap_or(false);
+                if self.current_event_consumed { break; }
+            }
+        }
+
+        // Update hovered nodes
+        self.event_manager.hovered_nodes = current_hovered_nodes;
         
-        // Still run any property change callbacks that might have been triggered
+        // Run any property change callbacks that might have been triggered by a property set
         self.run_callbacks();
         
         events
@@ -550,6 +591,8 @@ impl RmlEngine {
             }
         }
         
+        // todo : check if the event is consumed ?
+
         // Execute callbacks immediately with their specific event (at the difference of other events that are processed in process_events)
         for (callback_id, event) in callbacks_with_event {
             if let Some(callback) = self.callbacks.get(&callback_id).cloned() {
@@ -558,29 +601,33 @@ impl RmlEngine {
                 callback(self);
                 // Clear immediately after callback execution
                 self.current_event = None;
+                
             }
         }
     }
     
-    fn get_nodes_under_mouse(&self) -> std::collections::HashSet<NodeId> {
+    fn get_nodes_under_mouse(&self) -> Vec<NodeId> {
         let mouse_pos = self.event_manager.get_mouse_position();
-        self.get_nodes_at_position(mouse_pos.0, mouse_pos.1).into_iter().collect()
+        self.get_nodes_at_position(mouse_pos.0, mouse_pos.1)
     }
     
     fn get_nodes_at_position(&self, x: f32, y: f32) -> Vec<NodeId> {
         let mut nodes = Vec::new();
         
         // Only check MouseArea nodes for mouse events
-        for (_, &node_id) in &self.arena.id_to_node_id {
-            if let Some(node) = self.arena.get_node(node_id) {
-                if node.node_type == ItemTypeEnum::MouseArea {
-                    if self.is_point_inside_node(node_id, x, y) {
-                        nodes.push(node_id);
+        for node in &self.arena.nodes {
+            if node.node_type == ItemTypeEnum::MouseArea {
+                if let Some(node_id) = self.arena.id_to_node_id.get(&node.id) {
+                    if self.is_point_inside_node(*node_id, x, y) {
+                        nodes.push(*node_id);
                     }
                 }
             }
         }
-        
+
+        nodes.reverse(); // Reverse to ensure topmost nodes are checked first
+        // like the nodes are created in a top-down manner, the last created node is the topmost one
+        // and any node before a node in the list is below it visually 
         nodes
     }
     
