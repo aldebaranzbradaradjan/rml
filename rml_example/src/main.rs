@@ -3,7 +3,7 @@
 use macroquad::prelude::*;
 
 use std::collections::HashMap;
-use rml_core::{ RmlEngine, Property, AbstractValue, get_number, set_number, get_string, set_string, ItemTypeEnum};
+use rml_core::{ RmlEngine, Property, AbstractValue, get_number, set_number, get_string, get_key_event, SystemEvent, EventType, set_string, ItemTypeEnum};
 use rml_macros::rml;
 
 fn window_conf() -> Conf {
@@ -173,6 +173,7 @@ async fn main() {
             Rectangle {
                 id: outer_rect
                 x: {
+                    engine.set_focused_node("outer_rect");
                     let root_width = get_number!(engine, root, width);
                     let outer_rect_width = get_number!(engine, outer_rect, width);
                     let outer_rect_x = root_width / 2.0 - outer_rect_width / 2.0;
@@ -183,6 +184,27 @@ async fn main() {
                     let outer_rect_height = get_number!(engine, outer_rect, height);
                     let outer_rect_y = root_height / 2.0 - outer_rect_height / 2.0;
                     outer_rect_y
+                }
+
+                on_key_down: {
+                    let mut x = engine.get_number_property_of_node("outer_rect", "x", 0.0);
+                    let mut y = engine.get_number_property_of_node("outer_rect", "y", 0.0);
+
+                    if is_key_down(KeyCode::Right) {
+                        x += 1.0;
+                    }
+                    if is_key_down(KeyCode::Left) {
+                        x -= 1.0;
+                    }
+                    if is_key_down(KeyCode::Down) {
+                        y += 1.0;
+                    }
+                    if is_key_down(KeyCode::Up) {
+                        y -= 1.0;
+                    }
+
+                    engine.set_property_of_node("outer_rect", "x", AbstractValue::Number(x));
+                    engine.set_property_of_node("outer_rect", "y", AbstractValue::Number(y));
                 }
 
                 width: 200
@@ -346,33 +368,7 @@ async fn main() {
 
 
     loop {
-        // Process system events (keyboard, mouse, window)
-        engine.process_system_events();
-        
-        // Legacy keyboard handling (you can remove this if you prefer using events)
-        let mut x = engine.get_number_property_of_node("outer_rect", "x", 0.0);
-        let mut y = engine.get_property_of_node("outer_rect", "y", 0.0, |v| v.to_number().map(|n| n as f32));
-
-        if is_key_down(KeyCode::Right) {
-            x += 1.0;
-        }
-        if is_key_down(KeyCode::Left) {
-            x -= 1.0;
-        }
-        if is_key_down(KeyCode::Down) {
-            y += 1.0;
-        }
-        if is_key_down(KeyCode::Up) {
-            y -= 1.0;
-        }
-
-        engine.set_property_of_node("outer_rect", "x", AbstractValue::Number(x));
-        engine.set_property_of_node("outer_rect", "y", AbstractValue::Number(y));
-        
-        // run callbacks if any property changed
-        // this guarantees that the callbacks are run sequentially in the same frame and thread
-        engine.run_callbacks();
-
+        engine.process_events();
         clear_background(BLACK);
         rml_core::draw::draw_childs(&mut engine, "root", (0., 0.));
         next_frame().await

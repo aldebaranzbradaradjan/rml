@@ -161,9 +161,9 @@ macro_rules! get_mouse_event_pos {
 macro_rules! get_key_event {
     ($engine:expr) => {{
         match &$engine.current_event {
-            Some(SystemEvent::KeyDown { key }) |
-            Some(SystemEvent::KeyUp { key }) |
-            Some(SystemEvent::KeyPressed { key }) => Some(*key),
+            Some(SystemEvent::KeyDown { key, .. }) |
+            Some(SystemEvent::KeyUp { key, .. }) |
+            Some(SystemEvent::KeyPressed { key, .. }) => Some(*key),
             _ => None
         }
     }};
@@ -456,50 +456,148 @@ impl RmlEngine {
         &mut self.event_manager
     }
     
-    pub fn set_focused_node(&mut self, node_id_str: Option<&str>) {
-        let node_id = node_id_str.and_then(|id| self.get_node_id(id));
+    pub fn set_focused_node(&mut self, node_id_str: &str) {
+        let node_id = self.get_node_id(node_id_str);
         self.event_manager.set_focused_node(node_id);
     }
     
     pub fn process_events(&mut self) -> Vec<SystemEvent> {
         // Update from macroquad input
         let events = self.event_manager.update_from_macroquad();
-        // Process each event and trigger callbacks immediately
-        for event in &events {
-            self.handle_system_event(event);
-        }
 
         // Handle mouse enter and leave events
         // Check for nodes that are currently hovered
         let hovered_nodes = self.get_nodes_under_mouse();
+        let mouse_area_nodes = self.get_mouse_area_nodes();
+        let focused_node = self.event_manager.get_focused_node();
         let mut current_hovered_nodes = Vec::new();
         self.current_event_consumed = false;
 
-        for node in hovered_nodes {
+        // Check for focused node events
+        // Check for key up events
+        if let Some(key) = events.iter().find_map(|event| match event {
+            SystemEvent::KeyUp { node_id: _, key } => Some( key ),
+            _ => None,
+        }) {
+            if let Some(node_id) = focused_node {
+                self.handle_system_event(&SystemEvent::KeyUp { node_id: node_id, key: *key });
+            }
+        }
+
+        // Check for key down events
+        if let Some(key) = events.iter().find_map(|event| match event {
+            SystemEvent::KeyDown { node_id: _, key } => Some( key ),
+            _ => None,
+        }) {
+            if let Some(node_id) = focused_node {
+                self.handle_system_event(&SystemEvent::KeyDown { node_id: node_id, key: *key });
+            }
+        }
+
+        // Check for key pressed events
+        if let Some(key) = events.iter().find_map(|event| match event {
+            SystemEvent::KeyPressed { node_id: _, key } => Some( key ),
+            _ => None,
+        }) {
+            if let Some(node_id) = focused_node {
+                self.handle_system_event(&SystemEvent::KeyPressed { node_id: node_id, key: *key });
+            }
+        }
+
+        // check for enter event
+        for node in hovered_nodes.clone() {
             current_hovered_nodes.push(node);
-            if !self.event_manager.is_node_hovered(node) && !self.current_event_consumed {
+            if !self.event_manager.is_node_hovered(node) {
                 // If the node is not hovered, we trigger MouseEnter
                 self.handle_system_event(&SystemEvent::MouseEnter { node_id: node });
             }
-            if let Some(consume_mouse_enter) = self.get_property_by_name(node, "consume_mouse_enter") {
-                self.current_event_consumed = consume_mouse_enter.get().to_bool().unwrap_or(false);
+            if let Some(consume) = self.get_property_by_name(node, "consume_mouse_enter") {
+                self.current_event_consumed = consume.get().to_bool().unwrap_or(false);
                 if self.current_event_consumed { break; }
             }
         }
+
+        // Check for click event
+        if let Some((x, y, button)) = events.iter().find_map(|event| match event {
+            SystemEvent::Click { node_id: _, x, y, button } => Some((*x, *y, *button)),
+            _ => None,
+        }) {
+            for node in &hovered_nodes {
+                self.handle_system_event(&SystemEvent::Click { node_id: *node, x, y, button });
+                if let Some(consume) = self.get_property_by_name(*node, "consume_mouse_click") {
+                    self.current_event_consumed = consume.get().to_bool().unwrap_or(false);
+                    if self.current_event_consumed { break; }
+                }
+            }
+        }
+
+        // Check for down event
+        if let Some((x, y, button)) = events.iter().find_map(|event| match event {
+            SystemEvent::MouseDown { node_id: _, x, y, button } => Some((*x, *y, *button)),
+            _ => None,
+        }) {
+            for node in &hovered_nodes {
+                self.handle_system_event(&SystemEvent::MouseDown { node_id: *node, x, y, button });
+                if let Some(consume) = self.get_property_by_name(*node, "consume_mouse_down") {
+                    self.current_event_consumed = consume.get().to_bool().unwrap_or(false);
+                    if self.current_event_consumed { break; }
+                }
+            }
+        }
+
+        // Check for up event
+        if let Some((x, y, button)) = events.iter().find_map(|event| match event {
+            SystemEvent::MouseUp { node_id: _, x, y, button } => Some((*x, *y, *button)),
+            _ => None,
+        }) {
+            for node in &hovered_nodes {
+                self.handle_system_event(&SystemEvent::MouseUp { node_id: *node, x, y, button });
+                if let Some(consume) = self.get_property_by_name(*node, "consume_mouse_up") {
+                    self.current_event_consumed = consume.get().to_bool().unwrap_or(false);
+                    if self.current_event_consumed { break; }
+                }
+            }
+        }
+
+        // Check for mouse wheel events
+        if let Some((delta_x, delta_y)) = events.iter().find_map(|event| match event {
+            SystemEvent::MouseWheel { node_id: _, delta_x, delta_y } => Some((*delta_x, *delta_y)),
+            _ => None,
+        }) {
+            for node in &hovered_nodes {
+                self.handle_system_event(&SystemEvent::MouseWheel { node_id: *node, delta_x, delta_y });
+                if let Some(consume) = self.get_property_by_name(*node, "consume_mouse_wheel") {
+                    self.current_event_consumed = consume.get().to_bool().unwrap_or(false);
+                    if self.current_event_consumed { break; }
+                }
+            }
+        }
+
+        // Check for mouse move events
+        if let Some((x, y, delta_x, delta_y)) = events.iter().find_map(|event| match event {
+            SystemEvent::MouseMove { node_id: _, x, y, delta_x, delta_y } => Some((*x, *y, *delta_x, *delta_y)),
+            _ => None,
+        }) {
+            for node in &mouse_area_nodes {
+                self.handle_system_event(&SystemEvent::MouseMove { node_id: *node, x, y, delta_x, delta_y });
+                if let Some(consume) = self.get_property_by_name(*node, "consume_mouse_move") {
+                    self.current_event_consumed = consume.get().to_bool().unwrap_or(false);
+                    if self.current_event_consumed { break; }
+                }
+            }
+        }
+
         // Check for nodes that are no longer hovered
         let previously_hovered_nodes = self.event_manager.hovered_nodes.clone();
         self.current_event_consumed = false;
 
         for &node_id in &previously_hovered_nodes {
-            if !current_hovered_nodes.contains(&node_id) && !self.current_event_consumed {
+            if !current_hovered_nodes.contains(&node_id) {
                 // If the node was previously hovered but is no longer, trigger MouseLeave
                 self.handle_system_event(&SystemEvent::MouseLeave { node_id });
-                if let Some(consume_mouse_enter) = self.get_property_by_name(node_id, "consume_mouse_leave") {
-                    self.current_event_consumed = consume_mouse_enter.get().to_bool().unwrap_or(false);
-                }
             }
-            if let Some(consume_mouse_enter) = self.get_property_by_name(node_id, "consume_mouse_enter") {
-                self.current_event_consumed = consume_mouse_enter.get().to_bool().unwrap_or(false);
+            if let Some(consume) = self.get_property_by_name(node_id, "consume_mouse_leave") {
+                self.current_event_consumed = consume.get().to_bool().unwrap_or(false);
                 if self.current_event_consumed { break; }
             }
         }
@@ -518,80 +616,26 @@ impl RmlEngine {
         let mut callbacks_with_event = Vec::new();
         
         match event {
-            // Global events (not node-specific)
-            SystemEvent::KeyDown { .. } | SystemEvent::KeyUp { .. } | SystemEvent::KeyPressed { .. } => {
-                // Send to focused node if any
-                if let Some(focused_node) = self.event_manager.get_focused_node() {
-                    let handlers = self.event_manager.get_handlers_for_node(focused_node, &event_type);
-                    for handler in handlers {
-                        callbacks_with_event.push((handler.callback_id, event.clone()));
-                    }
-                }
-                
-                // Also send to global handlers
-                let global_handlers = self.event_manager.get_handlers_for_event(&event_type);
-                for handler in global_handlers {
-                    callbacks_with_event.push((handler.callback_id, event.clone()));
-                }
-            }
-            
-            // Mouse events with position - check which nodes are affected
-            SystemEvent::MouseDown { x, y, .. } | SystemEvent::MouseUp { x, y, .. } | SystemEvent::Click { x, y, .. } => {
-                let affected_nodes = self.get_nodes_at_position(*x, *y);
-                for node_id in affected_nodes {
-                    let handlers = self.event_manager.get_handlers_for_node(node_id, &event_type);
-                    for handler in handlers {
-                        callbacks_with_event.push((handler.callback_id, event.clone()));
-                    }
-                }
-            }
-            
             // Mouse wheel - check which nodes are under current mouse position
-            SystemEvent::MouseWheel { .. } => {
-                let mouse_pos = self.event_manager.get_mouse_position();
-                let affected_nodes = self.get_nodes_at_position(mouse_pos.0, mouse_pos.1);
-                for node_id in affected_nodes {
-                    let handlers = self.event_manager.get_handlers_for_node(node_id, &event_type);
-                    for handler in handlers {
-                        callbacks_with_event.push((handler.callback_id, event.clone()));
-                    }
-                }
-            }
-            
-            // Mouse move - check all MouseArea nodes that have mouse move handlers
-            SystemEvent::MouseMove { .. } => {
-                // For mouse move, we trigger all MouseArea handlers regardless of position
-                // This is useful for drag operations that may go outside the original area
-                for (_, &node_id) in &self.arena.id_to_node_id {
-                    if let Some(node) = self.arena.get_node(node_id) {
-                        if node.node_type == ItemTypeEnum::MouseArea {
-                            let handlers = self.event_manager.get_handlers_for_node(node_id, &event_type);
-                            for handler in handlers {
-                                callbacks_with_event.push((handler.callback_id, event.clone()));
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Node-specific events
-            SystemEvent::MouseEnter { node_id } | SystemEvent::MouseLeave { node_id } => {
+            SystemEvent::MouseWheel { node_id, .. }
+            | SystemEvent::MouseMove { node_id, .. } 
+            | SystemEvent::MouseDown { node_id, .. }
+            | SystemEvent::MouseUp { node_id, .. }
+            | SystemEvent::Click { node_id, .. }
+            | SystemEvent::MouseEnter { node_id }
+            | SystemEvent::MouseLeave { node_id }
+            | SystemEvent::WindowResize { node_id, .. }
+            | SystemEvent::WindowFocus { node_id, .. }
+            | SystemEvent::WindowLostFocus { node_id, .. }
+            | SystemEvent::KeyDown { node_id, .. }
+            | SystemEvent::KeyUp { node_id, .. }
+            | SystemEvent::KeyPressed { node_id, .. } => {
                 let handlers = self.event_manager.get_handlers_for_node(*node_id, &event_type);
                 for handler in handlers {
                     callbacks_with_event.push((handler.callback_id, event.clone()));
                 }
             }
-            
-            // Window events (global)
-            SystemEvent::WindowResize { .. } | SystemEvent::WindowFocus | SystemEvent::WindowLostFocus => {
-                let global_handlers = self.event_manager.get_handlers_for_event(&event_type);
-                for handler in global_handlers {
-                    callbacks_with_event.push((handler.callback_id, event.clone()));
-                }
-            }
         }
-        
-        // todo : check if the event is consumed ?
 
         // Execute callbacks immediately with their specific event (at the difference of other events that are processed in process_events)
         for (callback_id, event) in callbacks_with_event {
@@ -611,6 +655,24 @@ impl RmlEngine {
         self.get_nodes_at_position(mouse_pos.0, mouse_pos.1)
     }
     
+    fn get_mouse_area_nodes(&self) -> Vec<NodeId> {
+        let mut nodes = Vec::new();
+        
+        // Only check MouseArea nodes for mouse events
+        for node in &self.arena.nodes {
+            if node.node_type == ItemTypeEnum::MouseArea {
+                if let Some(node_id) = self.arena.id_to_node_id.get(&node.id) {
+                    nodes.push(*node_id);
+                }
+            }
+        }
+
+        nodes.reverse(); // Reverse to ensure topmost nodes are checked first
+        // like the nodes are created in a top-down manner, the last created node is the topmost one
+        // and any node before a node in the list is below it visually 
+        nodes
+    }
+
     fn get_nodes_at_position(&self, x: f32, y: f32) -> Vec<NodeId> {
         let mut nodes = Vec::new();
         

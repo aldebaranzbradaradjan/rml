@@ -4,24 +4,24 @@ use crate::{CallbackId, NodeId};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SystemEvent {
-    // Keyboard events
-    KeyDown { key: KeyCode },
-    KeyUp { key: KeyCode },
-    KeyPressed { key: KeyCode },
-    
     // Mouse events
-    MouseDown { button: MouseButton, x: f32, y: f32 },
-    MouseUp { button: MouseButton, x: f32, y: f32 },
-    MouseMove { x: f32, y: f32, delta_x: f32, delta_y: f32 },
-    MouseWheel { delta_x: f32, delta_y: f32 },
+    MouseMove { node_id: NodeId, x: f32, y: f32, delta_x: f32, delta_y: f32 },
+    MouseWheel { node_id: NodeId, delta_x: f32, delta_y: f32 },
     MouseEnter { node_id: NodeId },
     MouseLeave { node_id: NodeId },
-    Click { button: MouseButton, x: f32, y: f32 },
+    MouseDown { node_id: NodeId, button: MouseButton, x: f32, y: f32 },
+    MouseUp { node_id: NodeId, button: MouseButton, x: f32, y: f32 },
+    Click { node_id: NodeId, button: MouseButton, x: f32, y: f32 },
     
     // Window events
-    WindowResize { width: f32, height: f32 },
-    WindowFocus,
-    WindowLostFocus,
+    WindowResize { node_id: NodeId, width: f32, height: f32 },
+    WindowFocus { node_id: NodeId },
+    WindowLostFocus { node_id: NodeId },
+
+    // Keyboard events
+    KeyDown { node_id: NodeId, key: KeyCode },
+    KeyUp { node_id: NodeId, key: KeyCode },
+    KeyPressed { node_id: NodeId, key: KeyCode },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -55,8 +55,8 @@ impl SystemEvent {
             SystemEvent::MouseLeave { .. } => EventType::MouseLeave,
             SystemEvent::Click { .. } => EventType::Click,
             SystemEvent::WindowResize { .. } => EventType::WindowResize,
-            SystemEvent::WindowFocus => EventType::WindowFocus,
-            SystemEvent::WindowLostFocus => EventType::WindowLostFocus,
+            SystemEvent::WindowFocus { .. } => EventType::WindowFocus,
+            SystemEvent::WindowLostFocus { .. } => EventType::WindowLostFocus,
         }
     }
 }
@@ -110,14 +110,6 @@ impl EventManager {
         self.handlers.push(handler);
     }
     
-    // pub fn remove_node_handlers(&mut self, node_id: NodeId) {
-    //     self.handlers.retain(|h| h.node_id != node_id);
-    //     self.hovered_nodes.remove(&node_id);
-    //     if self.focused_node == Some(node_id) {
-    //         self.focused_node = None;
-    //     }
-    // }
-    
     pub fn set_focused_node(&mut self, node_id: Option<NodeId>) {
         self.focused_node = node_id;
     }
@@ -138,9 +130,9 @@ impl EventManager {
         self.hovered_nodes.contains(&node_id)
     }
     
-    pub fn get_handlers_for_event(&self, event_type: &EventType) -> Vec<&EventHandler> {
-        self.handlers.iter().filter(|h| h.event_type == *event_type).collect()
-    }
+    // pub fn get_handlers_for_event(&self, event_type: &EventType) -> Vec<&EventHandler> {
+    //     self.handlers.iter().filter(|h| h.event_type == *event_type).collect()
+    // }
     
     pub fn get_handlers_for_node(&self, node_id: NodeId, event_type: &EventType) -> Vec<&EventHandler> {
         self.handlers.iter()
@@ -161,6 +153,7 @@ impl EventManager {
         
         if delta_x != 0.0 || delta_y != 0.0 {
             events.push(SystemEvent::MouseMove {
+                node_id: NodeId::default(), // Placeholder, should be set based on hovered nodes
                 x: self.mouse_position.0,
                 y: self.mouse_position.1,
                 delta_x,
@@ -173,6 +166,7 @@ impl EventManager {
             if is_mouse_button_pressed(button) {
                 self.mouse_buttons_pressed.insert(button);
                 events.push(SystemEvent::MouseDown {
+                    node_id: NodeId::default(), // Placeholder, should be set based on hovered nodes
                     button,
                     x: self.mouse_position.0,
                     y: self.mouse_position.1,
@@ -182,6 +176,7 @@ impl EventManager {
             if is_mouse_button_released(button) {
                 self.mouse_buttons_pressed.remove(&button);
                 events.push(SystemEvent::MouseUp {
+                    node_id: NodeId::default(), // Placeholder, should be set based on hovered nodes
                     button,
                     x: self.mouse_position.0,
                     y: self.mouse_position.1,
@@ -189,6 +184,7 @@ impl EventManager {
                 
                 // Generate click event
                 events.push(SystemEvent::Click {
+                    node_id: NodeId::default(), // Placeholder, should be set based on hovered nodes
                     button,
                     x: self.mouse_position.0,
                     y: self.mouse_position.1,
@@ -199,20 +195,20 @@ impl EventManager {
         // Check mouse wheel
         let (wheel_x, wheel_y) = mouse_wheel();
         if wheel_x != 0.0 || wheel_y != 0.0 {
-            events.push(SystemEvent::MouseWheel { delta_x: wheel_x, delta_y: wheel_y });
+            events.push(SystemEvent::MouseWheel { node_id: NodeId::default(), delta_x: wheel_x, delta_y: wheel_y });
         }
         
         // Check keyboard events
         for key in get_keys_pressed() {
-            events.push(SystemEvent::KeyPressed { key });
+            events.push(SystemEvent::KeyPressed { node_id: NodeId::default(), key });
         }
         
         for key in get_keys_down() {
-            events.push(SystemEvent::KeyDown { key });
+            events.push(SystemEvent::KeyDown { node_id: NodeId::default(), key });
         }
         
         for key in get_keys_released() {
-            events.push(SystemEvent::KeyUp { key });
+            events.push(SystemEvent::KeyUp { node_id: NodeId::default(), key });
         }
         
         // Check window resize
@@ -220,6 +216,7 @@ impl EventManager {
         if current_size != self.window_size {
             self.window_size = current_size;
             events.push(SystemEvent::WindowResize {
+                node_id: NodeId::default(), 
                 width: current_size.0,
                 height: current_size.1,
             });

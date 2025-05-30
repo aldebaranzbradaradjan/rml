@@ -93,6 +93,48 @@ async fn main() {
                 }
             }
 
+            // Button to reset scroll area size
+            Rectangle {
+                id: reset_button
+                anchors: bottom | left
+                margins: 20.0
+                width: 120.0
+                height: 40.0
+                color: "rgba(0.8, 0.3, 0.3, 1.0)"
+
+                Text {
+                    anchors: center
+                    color: "rgba(1.0, 1.0, 1.0, 1.0)"
+                    text: "Reset Size"
+                    font_size: 18
+                }
+
+                MouseArea {
+                    anchors: fill
+                    
+                    on_mouse_down: {
+                        println!("Reset button clicked");
+                        set_number!(engine, scroll_area, width, 300.0);
+                        set_number!(engine, scroll_area, height, 150.0);
+                        set_string!(engine, reset_button, color, "rgba(0.7, 0.2, 0.2, 1.0)".to_string());
+                        set_string!(engine, c_scroll_info, text, "Size reset to default".to_string());
+                    }
+
+                    on_mouse_up: {
+                        println!("Reset button released");
+                        set_string!(engine, reset_button, color, "rgba(0.8, 0.3, 0.3, 1.0)".to_string());
+                    }
+                    
+                    on_mouse_enter: {
+                        set_string!(engine, reset_button, color, "rgba(0.9, 0.4, 0.4, 1.0)".to_string());
+                    }
+                    
+                    on_mouse_leave: {
+                        set_string!(engine, reset_button, color, "rgba(0.8, 0.3, 0.3, 1.0)".to_string());
+                    }
+                }
+            }
+
             // Draggable element to test computed positions
             Rectangle {
                 id: draggable
@@ -151,6 +193,56 @@ async fn main() {
                     
                     on_mouse_leave: {
                         set_string!(engine, draggable, color, "rgba(0.3, 0.8, 0.6, 1.0)".to_string());
+                    }
+                }
+            }
+
+            // Container to test key events
+            Rectangle {
+                id: test_key
+                anchors: top | right
+                margins: 20.0
+                width: 300.0
+                height: 200.0
+                color: "rgba(0.2, 0.3, 0.8, 1.0)"
+
+                Text {
+                    id: test_key_text
+                    x: 20.0
+                    y: 30.0
+                    color: "rgba(1.0, 1.0, 1.0, 1.0)"
+                    text: "Container for Key Events"
+                    font_size: 20
+                }
+
+                on_key_pressed: {
+                    let key = get_key_event!(engine);
+                    set_string!(engine, test_key_text, text, format!("key pressed : {:?}", key));
+                    println!("Key pressed in container: {:?}", key);
+                }
+
+                MouseArea {
+                    anchors: fill
+                    
+                    on_mouse_enter: {
+                        set_string!(engine, test_key, color, "rgba(0.3, 0.4, 0.9, 1.0)".to_string());
+                    }
+                    
+                    on_mouse_leave: {
+                        set_string!(engine, test_key, color, "rgba(0.2, 0.3, 0.8, 1.0)".to_string());
+                    }
+
+                    on_mouse_down : {
+                        set_string!(engine, test_key, color, "rgba(0.1, 0.2, 0.7, 1.0)".to_string());
+                    }
+
+                    on_mouse_up : {
+                        set_string!(engine, test_key, color, "rgba(0.2, 0.3, 0.8, 1.0)".to_string());
+                    }
+
+                    on_click: {
+                        println!("Container clicked");
+                        engine.set_focused_node("test_key");
                     }
                 }
             }
