@@ -85,19 +85,30 @@ This project is under active experimentation.
 
 * System events: Keyboard & mouse input & window events ✅
 
-## Planned Features / TODO
+* Load multiple files (e.g., external components) ✅
+
+* Optional scoped IDs: isolate ID usage per file (limited to root node of a file) ✅
+
+## Planned Features / TODO (order by interest)
+
+* Custom event definitions
 
 * Add an Image node type
 
 * Add tests
 
-* Rename to CML (Cute Markup Language) — a more playful alternative to RML
-
-* Load multiple files (e.g., external components)
-
-* Custom event definitions
-
 * Implement rapid setter / getter $ macro ( $.draggable.x = new_x; )
+
+* Layout & positioning:
+    * Layout system
+
+    * Positioning items: Column, Row, Grid; compatible with anchors and the layout system
+
+* Data models:
+
+    * ListModel, TableModel via declarative Rust macros
+
+    * Support for field access, sorting, and filtering
 
 * Resource system:
 
@@ -105,19 +116,8 @@ This project is under active experimentation.
 
     * Bundle with executable
 
-* Optional scoped IDs: isolate ID usage per file
-
-* Layout & positioning:
-
-    * Positioning items: Column, Row, Grid
-
-    * Fully compatible with anchors and the layout system
-
-* Data models:
-
-    * ListModel, TableModel via declarative Rust macros
-
-    * Support for field access, sorting, and filtering
+* Rename to CML (Cute Markup Language)
+I'm considering renaming it to CML (Cute Markup Language) - a more playful alternative to RML, which could be misinterpreted as Rust Markup Language. However, I'm attached to the RML name, as it makes sense for a rustic, Rust-based project inspired by QML. That being said, I'm open to feedback; if you disagree with the name, feel free to open an issue and we can discuss it. For now, the project is small, so it's not a top priority."
 
 ## License
 

@@ -65,7 +65,6 @@ async fn main() {
                 color: "rgba(0.8, 0.2, 0.2, 1.0)"
                 on_clicked_changed: {
                     println!("Third button clicked!");
-                    //set_bool!(engine, id7e5fd640c9f94a9fb80210410ab5a6f9, visible, true);
                     set_string!(engine, info_card, content, "Third button clicked! (with unique ID) - see console output for more info about the event".to_string());
                 }
             }
