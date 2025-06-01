@@ -450,14 +450,14 @@ impl RmlEngine {
     pub fn process_events(&mut self) -> Vec<SystemEvent> {
         // Update from macroquad input
         let events = self.event_manager.update_from_macroquad();
-        let hovered_nodes = self.get_nodes_under_mouse();
+        let hovered_nodes = self.get_mouse_area_nodes_under_mouse();
         let mouse_area_nodes = self.get_mouse_area_nodes();
         let focused_node = self.event_manager.get_focused_node();
         let mut current_hovered_nodes = Vec::new();
         self.current_event_consumed = false;
 
         // we will refine events before handling them
-        // Some events can be consumed, some affects hovered only, or focused only, and some are globals
+        // Some events can be consumed, some affects hovered only, mousearea only or focused only, and some are globals
 
         // Handle mouse events
         // check for enter event
@@ -617,19 +617,22 @@ impl RmlEngine {
         }
     }
     
-    fn get_nodes_under_mouse(&self) -> Vec<NodeId> {
+    fn get_mouse_area_nodes_under_mouse(&self) -> Vec<NodeId> {
         let mouse_pos = self.event_manager.get_mouse_position();
-        self.get_nodes_at_position(mouse_pos.0, mouse_pos.1)
+        self.get_mouse_area_nodes_at_position(mouse_pos.0, mouse_pos.1)
     }
     
-    fn get_mouse_area_nodes(&self) -> Vec<NodeId> {
+
+    fn get_mouse_area_nodes_at_position(&self, x: f32, y: f32) -> Vec<NodeId> {
         let mut nodes = Vec::new();
         
         // Only check MouseArea nodes for mouse events
         for node in &self.arena.nodes {
             if node.node_type == ItemTypeEnum::MouseArea {
                 if let Some(node_id) = self.arena.id_to_node_id.get(&node.id) {
-                    nodes.push(*node_id);
+                    if self.is_point_inside_node(*node_id, x, y) {
+                        nodes.push(*node_id);
+                    }
                 }
             }
         }
@@ -640,16 +643,14 @@ impl RmlEngine {
         nodes
     }
 
-    fn get_nodes_at_position(&self, x: f32, y: f32) -> Vec<NodeId> {
+    fn get_mouse_area_nodes(&self) -> Vec<NodeId> {
         let mut nodes = Vec::new();
         
         // Only check MouseArea nodes for mouse events
         for node in &self.arena.nodes {
             if node.node_type == ItemTypeEnum::MouseArea {
                 if let Some(node_id) = self.arena.id_to_node_id.get(&node.id) {
-                    if self.is_point_inside_node(*node_id, x, y) {
-                        nodes.push(*node_id);
-                    }
+                    nodes.push(*node_id);
                 }
             }
         }
