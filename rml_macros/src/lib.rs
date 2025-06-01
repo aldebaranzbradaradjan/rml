@@ -1,15 +1,18 @@
 use proc_macro::TokenStream;
 use proc_macro2::Span;
-use quote::{format_ident, quote, ToTokens};
+use quote::{format_ident, quote};
 
 use syn::parse::{Parse, ParseBuffer, ParseStream};
-use syn::{parse_macro_input, Ident, Lit, Token, Expr, File, Item, ExprCall, ExprPath, Member};
+use syn::{parse_macro_input, Ident, Lit, Token, Expr, ExprPath, Member, LitStr};
 
 use uuid::Uuid;
 
-use rml_core::{AbstractValue, ItemTypeEnum, Property, RmlEngine, EventType};
+use rml_core::{AbstractValue, ItemTypeEnum};
 
 use std::process::{Command, Stdio};
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 
 // struct to represent a property key
 // It can be a simple identifier or a composed one (base.field)
@@ -20,6 +23,20 @@ enum PropertyKey {
         base: Ident, 
         field: Ident 
     },
+}
+
+// struct to represent an import statement
+#[derive(Debug, Clone)]
+struct ImportStatement {
+    path: String,
+    alias: Option<String>,
+}
+
+// Component definition parsed from a .rml file
+#[derive(Clone)]
+struct ComponentDefinition {
+    name: String,
+    node: RmlNode,
 }
 
 impl PropertyKey {
@@ -92,15 +109,68 @@ fn inject_engine_text_based(
     output
 }
 
+fn load_components_from_path(path: &str) -> Result<Vec<ComponentDefinition>, Box<dyn std::error::Error>> {
+    let mut components = Vec::new();
+    
+    // Get the directory path relative to the current file
+    let components_dir = Path::new(path);
+    
+    if !components_dir.exists() || !components_dir.is_dir() {
+        return Err(format!("Component directory '{}' not found", path).into());
+    }
+    
+    // Read all .rml files in the directory
+    for entry in fs::read_dir(components_dir)? {
+        let entry = entry?;
+        let file_path = entry.path();
+        
+        if file_path.extension().and_then(|s| s.to_str()) == Some("rml") {
+            let component_name = file_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("UnknownComponent")
+                .to_string();
+            
+            // Read and parse the component file
+            let file_content = fs::read_to_string(&file_path)?;
+            
+            // Parse the RML content as a component
+            if let Ok(component_node) = parse_component_content(&file_content) {
+                components.push(ComponentDefinition {
+                    name: component_name,
+                    node: component_node,
+                });
+            }
+        }
+    }
+    
+    Ok(components)
+}
+
+fn parse_component_content(content: &str) -> Result<RmlNode, Box<dyn std::error::Error>> {
+    // Parse the content as a TokenStream and then as an RmlNode
+    let tokens: proc_macro2::TokenStream = content.parse()?;
+    let parsed = syn::parse2::<RmlNode>(tokens)?;
+    Ok(parsed)
+}
+
+
 #[proc_macro]
 pub fn rml(input: TokenStream) -> TokenStream {
-    let parsed = parse_macro_input!(input as RmlNode);
-    let generated = parsed.generate();
+    // Try to parse as RmlParser first (with imports), fallback to RmlNode for backward compatibility
+    let (parsed_node, components) = if let Ok(rml_parser) = syn::parse::<RmlParser>(input.clone()) {
+        (rml_parser.root_node, rml_parser.components)
+    } else {
+        let parsed = parse_macro_input!(input as RmlNode);
+        (parsed, HashMap::new())
+    };
+    
+    let generated = parsed_node.generate_with_components(&components);
     let generated_node = generated.1;
     let generated_functions = generated.2;
     let generated_initializer = generated.3;
 
-    let mut functions_name: Vec<String> = parsed
+    let functions_name: Vec<String> = parsed_node
         .functions
         .iter()
         .map(|f| f.sig.ident.to_string())
@@ -131,6 +201,7 @@ pub fn rml(input: TokenStream) -> TokenStream {
     TokenStream::from(result)
 }
 
+#[derive(Clone)]
 enum Value {
     Lit(Lit),
     Ident(Ident),
@@ -188,7 +259,8 @@ impl ToString for Value {
 }
 
 fn inject_engine_in_block(mut block: syn::Block, initializer: bool) -> syn::Block {
-    use syn::{Expr, ExprCall, ExprPath, Stmt, Token};
+    //use syn::{Expr, ExprCall, ExprPath, Stmt, Token};
+    use syn::{Expr, Stmt};
 
     block.stmts = block
         .stmts
@@ -369,11 +441,80 @@ fn find_related_property_for_binding(id: String, property: String, block_string:
 }
 
 /// Struct to parse a Node
+#[derive(Clone)]
 struct RmlNode {
     _ident: Ident,
     properties: Vec<(PropertyKey, Value)>,
     children: Vec<RmlNode>,
     functions: Vec<syn::ItemFn>,
+}
+
+/// Main RML parser that includes imports
+struct RmlParser {
+    components: HashMap<String, ComponentDefinition>,
+    root_node: RmlNode,
+}
+
+impl Parse for ImportStatement {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        // Parse "import" as an identifier
+        let import_keyword: Ident = input.parse()?;
+        if import_keyword != "import" {
+            return Err(syn::Error::new(import_keyword.span(), "Expected 'import'"));
+        }
+        
+        let path_str: LitStr = input.parse()?;
+        let path = path_str.value();
+        
+        let alias = if input.peek(Token![as]) {
+            input.parse::<Token![as]>()?;
+            let alias_ident: Ident = input.parse()?;
+            Some(alias_ident.to_string())
+        } else {
+            None
+        };
+        
+        Ok(ImportStatement { path, alias })
+    }
+}
+
+impl Parse for RmlParser {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut components = HashMap::new();
+        
+        // Parse imports first
+        while input.peek(Ident) && input.peek2(LitStr) {
+            // Check if this is an import statement by looking ahead
+            let fork = input.fork();
+            if let Ok(ident) = fork.parse::<Ident>() {
+                if ident == "import" {
+                    let import: ImportStatement = input.parse()?;
+                    
+                    // Load components from the import path
+                    if let Ok(loaded_components) = load_components_from_path(&import.path) {
+                        for component in loaded_components {
+                            let component_name = if let Some(alias) = &import.alias {
+                                format!("{}::{}", alias, component.name)
+                            } else {
+                                component.name.clone()
+                            };
+                            components.insert(component_name, component);
+                        }
+                    }
+                    continue;
+                }
+            }
+            break;
+        }
+        
+        // Parse the root node
+        let root_node: RmlNode = input.parse()?;
+        
+        Ok(RmlParser {
+            components,
+            root_node,
+        })
+    }
 }
 
 impl Parse for RmlNode {
@@ -400,7 +541,7 @@ impl Parse for RmlNode {
                 let fork = content.fork();
                 
                 // try to parse a property key
-                if let Ok(key) = parse_property_key(&fork) {
+                if let Ok(_key) = parse_property_key(&fork) {
                     if fork.peek(Token![:]) {
                         // assume it's a property
                         let key = parse_property_key(&content)?;
@@ -435,15 +576,29 @@ impl Parse for RmlNode {
 type GenResult = (String, proc_macro2::TokenStream, proc_macro2::TokenStream, proc_macro2::TokenStream);
 
 impl RmlNode {
-    fn generate(&self) -> GenResult {
-        let node_type = self._ident.to_string();
+    // fn generate(&self) -> GenResult {
+    //     self.generate_with_components(&HashMap::new())
+    // }
+    
+    fn generate_with_components(&self, components: &HashMap<String, ComponentDefinition>) -> GenResult {
+        let node_type_str = self._ident.to_string();
 
-        let node_type = match node_type.as_str() {
+        // Check if this is a custom component
+        if let Some(component_def) = components.get(&node_type_str) {
+            // For custom components, we expand them by generating the component's node
+            // and applying the properties passed to the component
+            println!("Generating custom component: {}", node_type_str);
+            let cmp = self.generate_custom_component(component_def, components);
+            //println!("Generated custom component: {} {}", cmp.0, cmp.1);
+            return cmp;
+        }
+
+        let node_type = match node_type_str.as_str() {
             "Node" => ItemTypeEnum::Node,
             "Rectangle" => ItemTypeEnum::Rectangle,
             "Text" => ItemTypeEnum::Text,
             "MouseArea" => ItemTypeEnum::MouseArea,
-            _ => panic!("Unknown node type: {}", node_type),
+            _ => panic!("Unknown node type: {}", node_type_str),
         };
         
         // search for the id property and generate a uuid if not found
@@ -457,14 +612,14 @@ impl RmlNode {
                     None 
                 }
             })
-            .unwrap_or_else(|| Uuid::new_v4().simple().to_string());
+            .unwrap_or_else(|| format!("generated_id_{}", Uuid::new_v4().simple().to_string()));
 
         let temp_node = format_ident!("temp_node_{}", id);
 
         let child_results: Vec<GenResult> = self
             .children
             .iter()
-            .map(|child| child.generate())
+            .map(|child| child.generate_with_components(components))
             .collect();
 
         let child_code: Vec<proc_macro2::TokenStream> = child_results
@@ -644,7 +799,7 @@ impl RmlNode {
                     }
                 } else {
                     let value = match v {
-                        Value::Block(block) => {
+                        Value::Block(_block) => {
                             quote! {
                                 let prop_id = engine.add_property(Property::new( AbstractValue::Null ));
                                 engine.add_property_to_node(#temp_node, stringify!(#k_ident).to_string() , prop_id);
@@ -689,5 +844,62 @@ impl RmlNode {
         };
 
         (id, node_code, functions_code, initializer_code)
+    }
+    
+    fn generate_custom_component(&self, component_def: &ComponentDefinition, components: &HashMap<String, ComponentDefinition>) -> GenResult {
+        // Clone the component's node and apply the properties from this instance
+        let mut component_node = component_def.node.clone();
+        let original_id: String = match component_node.properties.iter().find(|(k, _)| k.to_string() == "id".to_string()) {
+            Some(id) => id.1.to_string(),
+            None => String::from(""),
+        };
+
+        // remove id property if exist
+        component_node.properties.retain(|(k, _)| k.to_string() != "id".to_string());
+
+        // Override the component's properties with the ones passed to this instance
+        for (prop_key, prop_value) in &self.properties {
+            // Find if this property already exists in the component
+            if let Some(existing_prop) = component_node.properties.iter_mut().find(|(k, _)| k.to_string() == prop_key.to_string()) {
+                existing_prop.1 = prop_value.clone();
+            } else {
+                // Add new property
+                component_node.properties.push((prop_key.clone(), prop_value.clone()));
+            }
+        }
+        
+        // Add children from this instance to the component
+        component_node.children.extend(self.children.clone());
+        
+        // Generate the component with the applied properties
+        let component_gen_res = component_node.generate_with_components(components);
+        let new_id = component_gen_res.0.clone();
+
+        // replace the original id present in the component (in callbacks) with the new id
+        //println!("original_id: {}, new_id: {}", original_id, new_id);
+        
+        let mut component_code = component_gen_res.1;
+        let mut functions_code = component_gen_res.2;
+        let mut initializer_code = component_gen_res.3;
+        
+        // Only do replacement if we have an original_id to replace
+        if !original_id.is_empty() {
+            // Replace in component code
+            let component_str = component_code.to_string();
+            let new_component_str = component_str.replace(&original_id, &new_id);
+            component_code = new_component_str.parse().unwrap_or(component_code);
+            
+            // Replace in functions code
+            let functions_str = functions_code.to_string();
+            let new_functions_str = functions_str.replace(&original_id, &new_id);
+            functions_code = new_functions_str.parse().unwrap_or(functions_code);
+            
+            // Replace in initializer code
+            let initializer_str = initializer_code.to_string();
+            let new_initializer_str = initializer_str.replace(&original_id, &new_id);
+            initializer_code = new_initializer_str.parse().unwrap_or(initializer_code);
+        }
+
+        (new_id, component_code, functions_code, initializer_code)
     }
 }

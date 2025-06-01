@@ -1,0 +1,36 @@
+Rectangle {
+    id: root_btn_template
+    width: 100
+    height: 40
+    color: "rgba(0.3, 0.8, 0.6, 1.0)"
+    clicked: false
+    
+    Text {
+        anchors: center
+        text: "Button"
+        color: "rgba(1.0, 1.0, 1.0, 1.0)"
+        font_size: 16
+    }
+    
+    MouseArea {
+        anchors: fill
+        
+        on_click: {
+            // engine.set_property_of_node("root_btn_template", "clicked", crate::AbstractValue::Bool(true));
+            // engine.set_property_of_node("root_btn_template", "clicked", crate::AbstractValue::Bool(false));
+            set_bool!(engine, root_btn_template, clicked, true);
+            set_bool!(engine, root_btn_template, clicked, false);
+            println!("Button clicked (in template) ! root_btn_template");
+        }
+
+        on_mouse_enter: {
+            engine.set_property_of_node("root_btn_template", "clicked", crate::AbstractValue::Bool(false));
+            set_string!(engine, root_btn_template, color, "rgba(0.4, 0.9, 0.7, 1.0)".to_string());
+        }
+        
+        on_mouse_leave: {
+            engine.set_property_of_node("root_btn_template", "clicked", crate::AbstractValue::Bool(false));
+            set_string!(engine, root_btn_template, color, "rgba(0.3, 0.8, 0.6, 1.0)".to_string());
+        }
+    }
+}

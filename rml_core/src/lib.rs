@@ -327,14 +327,19 @@ impl RmlEngine {
                 if let Some(property_id) = node.get_property(property_name) {
                     if let Some(property) = self.get_property_mut(property_id) {
                         
+                        //println!("set_property_of_node: node_name: {}, property_name: {}", node_name, property_name);
+
                         // test if value changed
                         if property.get() == value {
                             return false;
                         }
                         property.set(value);
 
+                        //println!("value setted");
+
                         if let Some(callback_ids) = self.bindings.get(&property_id) {
                             for &cb_id in callback_ids {
+                                println!("callback id: {}", cb_id);
                                 self.callbacks_to_eval.push(cb_id);
                             }
                         }
