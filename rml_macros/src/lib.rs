@@ -295,6 +295,79 @@ fn property_parse(content: &ParseBuffer) -> Result<Value, syn::Error> {
     Ok(value)
 }
 
+fn find_related_property_for_binding(id: String, property: String, block_string: String) -> Vec<(String, String)> {
+    // ex: k_string = "x", block_string =
+    // "{
+    // let outer_rect_width = get_number!(engine, outer_rect, width);
+    // let inner_rect_width = get_number!(engine, inner_rect, width);
+    // let inner_rect_width = engine.get_number_property_of_node(inner_rect, "width", 0.0);
+    // outer_rect_width / 2.0 - inner_rect_width / 2.0
+    // }"
+    // will return [(outer_rect, width), (inner_rect, width)]
+    let mut related_properties = Vec::new();
+    
+    // if in block we find get_number!, get_string!, get_bool!, get_color!
+    // get_computed_x!, get_computed_y!, get_computed_width!, get_computed_height!
+    // get_number_property_of_node, get_string_property_of_node, get_bool_property_of_node, get_color_property_of_node
+    // or get_property_of_node
+    // we will add it to related_properties
+    for line in block_string.lines() {
+        let trimmed_line = line.trim();
+        
+        if trimmed_line.contains("get_number!") || trimmed_line.contains("get_string!") || 
+           trimmed_line.contains("get_bool!") || trimmed_line.contains("get_color!") ||
+           trimmed_line.contains("get_computed_x!") || trimmed_line.contains("get_computed_y!") || 
+           trimmed_line.contains("get_computed_width!") || trimmed_line.contains("get_computed_height!") {
+            
+            // Parse macro calls like get_number!(engine, node_name, property_name)
+            if let Some(start) = trimmed_line.find('(') {
+                if let Some(end) = trimmed_line.find(')') {
+                    let params = &trimmed_line[start + 1..end];
+                    let parts: Vec<&str> = params.split(',').map(|s| s.trim()).collect();
+                    
+                    if parts.len() >= 3 {
+                        let node_name = parts[1].trim();
+                        let property_name = parts[2].trim().trim_matches('"');
+                        if node_name == id && property_name == property {
+                            continue;
+                        }
+                        related_properties.push((node_name.to_string(), property_name.to_string()));
+                    }
+                }
+            }
+        }
+        else if trimmed_line.contains("get_number_property_of_node") || 
+                trimmed_line.contains("get_string_property_of_node") ||
+                trimmed_line.contains("get_bool_property_of_node") || 
+                trimmed_line.contains("get_color_property_of_node") || 
+                trimmed_line.contains("get_property_of_node") {
+            
+            // Parse method calls like engine.get_number_property_of_node(node_name, "property_name", default)
+            if let Some(start) = trimmed_line.find('(') {
+                if let Some(end) = trimmed_line.rfind(')') {
+                    let params = &trimmed_line[start + 1..end];
+                    let parts: Vec<&str> = params.split(',').map(|s| s.trim()).collect();
+                    
+                    if parts.len() >= 2 {
+                        let node_name = parts[0].trim();
+                        let property_name = parts[1].trim().trim_matches('"');
+                        if node_name == id && property_name == property {
+                            continue;
+                        }
+                        related_properties.push((node_name.to_string(), property_name.to_string()));
+                    }
+                }
+            }
+        }
+    }
+    
+    // Remove duplicates while preserving order
+    let mut seen = std::collections::HashSet::new();
+    related_properties.retain(|item| seen.insert(item.clone()));
+    
+    related_properties
+}
+
 /// Struct to parse a Node
 struct RmlNode {
     _ident: Ident,
@@ -417,22 +490,61 @@ impl RmlNode {
             .iter()
             .map(|(k, v)| {
                 let k_string = k.to_string();
-                let k_ident = k.to_ident(); // Nouveau helper
+                let k_ident = k.to_ident();
                 
+                // it's a binding
                 if !k_string.starts_with("on_") && !k_string.ends_with("_changed") {
                     let value = match v {
                         Value::Block(block) => {
+                            // find the property on wich depend the callback, we will need to analyze the block code
+                            // and compare the property names in the block with the property names in the engine
+                            // get block in string
+                            let block_string = format!("{}", quote! { #block });
+                            let related_property = find_related_property_for_binding(id.clone(), k_string, block_string);
+                            // Generate the binding calls
+                            let binding_calls: Vec<proc_macro2::TokenStream> = related_property.iter().map(|(node, prop)| {
+                                quote! {
+                                    engine.bind_node_property_to_callback(#node, #prop, cb_id);
+                                }
+                            }).collect();
+
+                            let temp_node_copy = temp_node.clone();
                             quote! {
                                 // here we set the property created in the properties part, this code will be executed in the initializer stage
                                 let value: AbstractValue = #block .into();
-                                let node_name = engine.get_node(#temp_node).unwrap().id.clone();
+                                let node_name = engine.get_node(#temp_node_copy ).unwrap().id.clone();
                                 engine.set_property_of_node(&node_name, stringify!(#k_ident), value);
+                                
+                                let captured_node = #temp_node;
+                                // create a callback to set the property when the related property used in the block changes
+                                let cb_id = engine.add_callback(move |engine| {
+                                    let value: AbstractValue = #block .into();
+                                    let node_name = engine.get_node( captured_node ).unwrap().id.clone();
+                                    engine.set_property_of_node(&node_name, stringify!(#k_ident), value);
+                                });
+                                
+                                // bind the property to the callback for each related property
+                                #(#binding_calls)*
                             }
                         }
                         _ => { quote! {} }
                     };
                     value
-                } else {
+                }
+                // it's an initializer
+                else  if k_string.starts_with("on_ready") {
+                    let value = match v {
+                        Value::Block(block) => {
+                            quote! {
+                                // this code will be executed in the initializer stage
+                                #block
+                            }
+                        }
+                        _ => { quote! {} }
+                    };
+                    value
+                }
+                else {
                     quote! {}
                 }
             }).collect();

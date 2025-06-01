@@ -81,6 +81,8 @@ This project is under active experimentation.
 
 * Lightweight and easy to extend ✅
 
+* Add on_ready event and compute bindings in property initialization ✅
+
 ## Planned Features / TODO
 
 * Add an Image node type

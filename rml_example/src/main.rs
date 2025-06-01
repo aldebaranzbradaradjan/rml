@@ -172,23 +172,33 @@ async fn main() {
 
             Rectangle {
                 id: outer_rect
-                x: {
+
+                x: 0
+                y: 0
+                width: 200
+                height: 200
+                color: "rgba(1.0, 1.0, 1.0, 1.0)"
+
+                on_ready: {
                     engine.set_focused_node("outer_rect");
+
                     let root_width = get_number!(engine, root, width);
                     let outer_rect_width = get_number!(engine, outer_rect, width);
                     let outer_rect_x = root_width / 2.0 - outer_rect_width / 2.0;
-                    outer_rect_x
-                }
-                y: {
+                    set_number!(engine, outer_rect, x, outer_rect_x);
+
                     let root_height = get_number!(engine, root, height);
                     let outer_rect_height = get_number!(engine, outer_rect, height);
                     let outer_rect_y = root_height / 2.0 - outer_rect_height / 2.0;
-                    outer_rect_y
+                    set_number!(engine, outer_rect, y, outer_rect_y);
+
+                    println!("outer_rect on_ready");
                 }
 
                 on_key_down: {
                     let mut x = get_number!(engine, outer_rect, x);
                     let mut y = get_number!(engine, outer_rect, y);
+                    let mut width = get_number!(engine, outer_rect, width);
 
                     let key = get_key_event!(engine);
                     match key {
@@ -196,16 +206,14 @@ async fn main() {
                         Some(KeyCode::Left) => x -= 1.0,
                         Some(KeyCode::Down) => y += 1.0,
                         Some(KeyCode::Up) => y -= 1.0,
+                        Some(KeyCode::Space) => width += 1.0,
                         _ => (),
                     }
 
                     set_number!(engine, outer_rect, x, x);
                     set_number!(engine, outer_rect, y, y);
+                    set_number!(engine, outer_rect, width, width);
                 }
-
-                width: 200
-                height: 200
-                color: "rgba(1.0, 1.0, 1.0, 1.0)"
 
                 fn set_text() {
                     let x = engine.get_number_property_of_node("outer_rect", "x", 0.0);
@@ -220,6 +228,7 @@ async fn main() {
                 Rectangle {
                     id: inner_rect
                     x: {
+                        println!("inner_rect binding");
                         let outer_rect_width = get_number!(engine, outer_rect, width);
                         let inner_rect_width = get_number!(engine, inner_rect, width);
                         outer_rect_width / 2.0 - inner_rect_width / 2.0
