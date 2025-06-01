@@ -3,7 +3,7 @@
 use macroquad::prelude::*;
 
 use std::collections::HashMap;
-use rml_core::{ RmlEngine, Property, AbstractValue, consume_current_event, get_number, set_number, get_string, set_string, get_bool, set_bool, get_computed_absolute_x, get_computed_absolute_y, get_computed_width, get_computed_height, ItemTypeEnum, EventType, SystemEvent, get_mouse_wheel_delta_x, get_mouse_wheel_delta_y, get_mouse_event_pos, get_key_event};
+use rml_core::{ RmlEngine, Property, AbstractValue, consume_current_event, get_number, set_number, get_string, set_string, get_bool, set_bool, get_computed_x, get_computed_y, get_computed_width, get_computed_height, ItemTypeEnum, EventType, SystemEvent, get_mouse_wheel_delta_x, get_mouse_wheel_delta_y, get_mouse_event_pos, get_key_event};
 use rml_macros::rml;
 
 fn window_conf() -> Conf {
@@ -172,8 +172,8 @@ async fn main() {
                         if get_bool!(engine, draggable, is_dragging) {
                             let (mouse_x, mouse_y) = engine.get_mouse_position();
                             // Convert to container-relative coordinates
-                            let container_abs_x = get_computed_absolute_x!(engine, container);
-                            let container_abs_y = get_computed_absolute_y!(engine, container);
+                            let container_abs_x = get_computed_x!(engine, container);
+                            let container_abs_y = get_computed_y!(engine, container);
                             
                             let new_x = mouse_x - container_abs_x - 40.0; // Center on cursor
                             let new_y = mouse_y - container_abs_y - 40.0;

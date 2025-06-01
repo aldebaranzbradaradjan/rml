@@ -559,18 +559,14 @@ impl RmlNode {
             ).unwrap();
 
             // create computed geometry properties for all nodes
-            let computed_abs_x_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
-            engine.add_property_to_node(#temp_node, "computed_absolute_x".to_string(), computed_abs_x_prop);
-            let computed_abs_y_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
-            engine.add_property_to_node(#temp_node, "computed_absolute_y".to_string(), computed_abs_y_prop);
+            let computed_x_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
+            engine.add_property_to_node(#temp_node, "computed_x".to_string(), computed_x_prop);
+            let computed_y_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
+            engine.add_property_to_node(#temp_node, "computed_y".to_string(), computed_y_prop);
             let computed_width_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
             engine.add_property_to_node(#temp_node, "computed_width".to_string(), computed_width_prop);
             let computed_height_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
             engine.add_property_to_node(#temp_node, "computed_height".to_string(), computed_height_prop);
-
-            // create a visible property for all nodes
-            let visible_prop = engine.add_property(Property::new(AbstractValue::Bool(true)));
-            engine.add_property_to_node(#temp_node, "visible".to_string(), visible_prop);
 
             #(#properties)*
 

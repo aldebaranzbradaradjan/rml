@@ -129,15 +129,16 @@ impl EventManager {
     pub fn is_node_hovered(&self, node_id: NodeId) -> bool {
         self.hovered_nodes.contains(&node_id)
     }
-    
-    // pub fn get_handlers_for_event(&self, event_type: &EventType) -> Vec<&EventHandler> {
-    //     self.handlers.iter().filter(|h| h.event_type == *event_type).collect()
-    // }
-    
+
     pub fn get_handlers_for_node(&self, node_id: NodeId, event_type: &EventType) -> Vec<&EventHandler> {
         self.handlers.iter()
             .filter(|h| h.node_id == node_id && h.event_type == *event_type)
             .collect()
+    }
+
+    pub fn get_handlers_for_event(&self, event_type: &EventType) -> Vec<&EventHandler> {
+        self.handlers.iter().filter(|h| h.event_type == *event_type)
+        .collect()
     }
     
     // Update internal state based on macroquad input

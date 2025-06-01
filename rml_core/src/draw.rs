@@ -268,8 +268,8 @@ pub fn draw_childs(engine: &mut RmlEngine, node_id: &str, parent_pos: (f32, f32)
         
         // Store computed geometry in node properties for event system reuse
         // x, y are already absolute coordinates (computed_geometry includes parent_pos)
-        engine.set_property_of_node(node_id, "computed_absolute_x", crate::AbstractValue::Number(x));
-        engine.set_property_of_node(node_id, "computed_absolute_y", crate::AbstractValue::Number(y));
+        engine.set_property_of_node(node_id, "computed_x", crate::AbstractValue::Number(x));
+        engine.set_property_of_node(node_id, "computed_y", crate::AbstractValue::Number(y));
         engine.set_property_of_node(node_id, "computed_width", crate::AbstractValue::Number(width));
         engine.set_property_of_node(node_id, "computed_height", crate::AbstractValue::Number(height));
         

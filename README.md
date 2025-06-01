@@ -83,6 +83,10 @@ This project is under active experimentation.
 
 ## Planned Features / TODO
 
+* Add an Image node type
+
+* Add tests
+
 * Rename to CML (Cute Markup Language) — a more playful alternative to RML
 
 * Load multiple files (e.g., external components)

@@ -77,28 +77,14 @@ macro_rules! set_color {
 #[macro_export]
 macro_rules! get_computed_x {
     ($engine:expr, $node:ident) => {{
-        $engine.get_number_property_of_node(stringify!($node), "computed_absolute_x", 0.0)
+        $engine.get_number_property_of_node(stringify!($node), "computed_x", 0.0)
     }};
 }
 
 #[macro_export]
 macro_rules! get_computed_y {
     ($engine:expr, $node:ident) => {{
-        $engine.get_number_property_of_node(stringify!($node), "computed_absolute_y", 0.0)
-    }};
-}
-
-#[macro_export]
-macro_rules! get_computed_absolute_x {
-    ($engine:expr, $node:ident) => {{
-        $engine.get_number_property_of_node(stringify!($node), "computed_absolute_x", 0.0)
-    }};
-}
-
-#[macro_export]
-macro_rules! get_computed_absolute_y {
-    ($engine:expr, $node:ident) => {{
-        $engine.get_number_property_of_node(stringify!($node), "computed_absolute_y", 0.0)
+        $engine.get_number_property_of_node(stringify!($node), "computed_y", 0.0)
     }};
 }
 
@@ -464,46 +450,16 @@ impl RmlEngine {
     pub fn process_events(&mut self) -> Vec<SystemEvent> {
         // Update from macroquad input
         let events = self.event_manager.update_from_macroquad();
-
-        // Handle mouse enter and leave events
-        // Check for nodes that are currently hovered
         let hovered_nodes = self.get_nodes_under_mouse();
         let mouse_area_nodes = self.get_mouse_area_nodes();
         let focused_node = self.event_manager.get_focused_node();
         let mut current_hovered_nodes = Vec::new();
         self.current_event_consumed = false;
 
-        // Check for focused node events
-        // Check for key up events
-        if let Some(key) = events.iter().find_map(|event| match event {
-            SystemEvent::KeyUp { node_id: _, key } => Some( key ),
-            _ => None,
-        }) {
-            if let Some(node_id) = focused_node {
-                self.handle_system_event(&SystemEvent::KeyUp { node_id: node_id, key: *key });
-            }
-        }
+        // we will refine events before handling them
+        // Some events can be consumed, some affects hovered only, or focused only, and some are globals
 
-        // Check for key down events
-        if let Some(key) = events.iter().find_map(|event| match event {
-            SystemEvent::KeyDown { node_id: _, key } => Some( key ),
-            _ => None,
-        }) {
-            if let Some(node_id) = focused_node {
-                self.handle_system_event(&SystemEvent::KeyDown { node_id: node_id, key: *key });
-            }
-        }
-
-        // Check for key pressed events
-        if let Some(key) = events.iter().find_map(|event| match event {
-            SystemEvent::KeyPressed { node_id: _, key } => Some( key ),
-            _ => None,
-        }) {
-            if let Some(node_id) = focused_node {
-                self.handle_system_event(&SystemEvent::KeyPressed { node_id: node_id, key: *key });
-            }
-        }
-
+        // Handle mouse events
         // check for enter event
         for node in hovered_nodes.clone() {
             current_hovered_nodes.push(node);
@@ -517,73 +473,78 @@ impl RmlEngine {
             }
         }
 
-        // Check for click event
-        if let Some((x, y, button)) = events.iter().find_map(|event| match event {
-            SystemEvent::Click { node_id: _, x, y, button } => Some((*x, *y, *button)),
-            _ => None,
-        }) {
-            for node in &hovered_nodes {
-                self.handle_system_event(&SystemEvent::Click { node_id: *node, x, y, button });
-                if let Some(consume) = self.get_property_by_name(*node, "consume_mouse_click") {
-                    self.current_event_consumed = consume.get().to_bool().unwrap_or(false);
-                    if self.current_event_consumed { break; }
+        for event in &events {
+            match event {
+                // global events
+                SystemEvent::WindowResize { .. } |SystemEvent::WindowFocus { .. } | SystemEvent::WindowLostFocus { .. } => {
+                    self.handle_system_event(event);
                 }
-            }
-        }
 
-        // Check for down event
-        if let Some((x, y, button)) = events.iter().find_map(|event| match event {
-            SystemEvent::MouseDown { node_id: _, x, y, button } => Some((*x, *y, *button)),
-            _ => None,
-        }) {
-            for node in &hovered_nodes {
-                self.handle_system_event(&SystemEvent::MouseDown { node_id: *node, x, y, button });
-                if let Some(consume) = self.get_property_by_name(*node, "consume_mouse_down") {
-                    self.current_event_consumed = consume.get().to_bool().unwrap_or(false);
-                    if self.current_event_consumed { break; }
+                // key events
+                SystemEvent::KeyUp { node_id: _, key } => {
+                    if let Some(node_id) = focused_node {
+                        self.handle_system_event(&SystemEvent::KeyUp { node_id: node_id, key: *key });
+                    }
                 }
-            }
-        }
+                SystemEvent::KeyDown { node_id: _, key } => {
+                    if let Some(node_id) = focused_node {
+                        self.handle_system_event(&SystemEvent::KeyDown { node_id: node_id, key: *key });
+                    }
+                    
+                }
+                SystemEvent::KeyPressed { node_id: _, key } => {
+                    if let Some(node_id) = focused_node {
+                        self.handle_system_event(&SystemEvent::KeyPressed { node_id: node_id, key: *key });
+                    }
+                }
 
-        // Check for up event
-        if let Some((x, y, button)) = events.iter().find_map(|event| match event {
-            SystemEvent::MouseUp { node_id: _, x, y, button } => Some((*x, *y, *button)),
-            _ => None,
-        }) {
-            for node in &hovered_nodes {
-                self.handle_system_event(&SystemEvent::MouseUp { node_id: *node, x, y, button });
-                if let Some(consume) = self.get_property_by_name(*node, "consume_mouse_up") {
-                    self.current_event_consumed = consume.get().to_bool().unwrap_or(false);
-                    if self.current_event_consumed { break; }
+                // mouse events
+                SystemEvent::Click { node_id: _, x, y, button } => {
+                    for node in &hovered_nodes {
+                        self.handle_system_event(&SystemEvent::Click { node_id: *node, x: *x, y: *y, button: *button });
+                        if let Some(consume) = self.get_property_by_name(*node, "consume_mouse_click") {
+                            self.current_event_consumed = consume.get().to_bool().unwrap_or(false);
+                            if self.current_event_consumed { break; }
+                        }
+                    }
                 }
-            }
-        }
-
-        // Check for mouse wheel events
-        if let Some((delta_x, delta_y)) = events.iter().find_map(|event| match event {
-            SystemEvent::MouseWheel { node_id: _, delta_x, delta_y } => Some((*delta_x, *delta_y)),
-            _ => None,
-        }) {
-            for node in &hovered_nodes {
-                self.handle_system_event(&SystemEvent::MouseWheel { node_id: *node, delta_x, delta_y });
-                if let Some(consume) = self.get_property_by_name(*node, "consume_mouse_wheel") {
-                    self.current_event_consumed = consume.get().to_bool().unwrap_or(false);
-                    if self.current_event_consumed { break; }
+                SystemEvent::MouseDown { node_id: _, x, y, button } => {
+                    for node in &hovered_nodes {
+                        self.handle_system_event(&SystemEvent::MouseDown { node_id: *node, x: *x, y: *y, button: *button });
+                        if let Some(consume) = self.get_property_by_name(*node, "consume_mouse_down") {
+                            self.current_event_consumed = consume.get().to_bool().unwrap_or(false);
+                            if self.current_event_consumed { break; }
+                        }
+                    }
                 }
-            }
-        }
-
-        // Check for mouse move events
-        if let Some((x, y, delta_x, delta_y)) = events.iter().find_map(|event| match event {
-            SystemEvent::MouseMove { node_id: _, x, y, delta_x, delta_y } => Some((*x, *y, *delta_x, *delta_y)),
-            _ => None,
-        }) {
-            for node in &mouse_area_nodes {
-                self.handle_system_event(&SystemEvent::MouseMove { node_id: *node, x, y, delta_x, delta_y });
-                if let Some(consume) = self.get_property_by_name(*node, "consume_mouse_move") {
-                    self.current_event_consumed = consume.get().to_bool().unwrap_or(false);
-                    if self.current_event_consumed { break; }
+                SystemEvent::MouseUp { node_id: _, x, y, button } => {
+                    for node in &hovered_nodes {
+                        self.handle_system_event(&SystemEvent::MouseUp { node_id: *node, x: *x, y: *y, button: *button });
+                        if let Some(consume) = self.get_property_by_name(*node, "consume_mouse_up") {
+                            self.current_event_consumed = consume.get().to_bool().unwrap_or(false);
+                            if self.current_event_consumed { break; }
+                        }
+                    }
                 }
+                SystemEvent::MouseMove { node_id: _, x, y, delta_x, delta_y } => {
+                    for node in &mouse_area_nodes {
+                        self.handle_system_event(&SystemEvent::MouseMove { node_id: *node, x: *x, y: *y, delta_x: *delta_x, delta_y: *delta_y });
+                        if let Some(consume) = self.get_property_by_name(*node, "consume_mouse_move") {
+                            self.current_event_consumed = consume.get().to_bool().unwrap_or(false);
+                            if self.current_event_consumed { break; }
+                        }
+                    }
+                }
+                SystemEvent::MouseWheel { node_id: _, delta_x, delta_y } => {
+                    for node in &mouse_area_nodes {
+                        self.handle_system_event(&SystemEvent::MouseWheel { node_id: *node, delta_x: *delta_x, delta_y: *delta_y });
+                        if let Some(consume) = self.get_property_by_name(*node, "consume_mouse_wheel") {
+                            self.current_event_consumed = consume.get().to_bool().unwrap_or(false);
+                            if self.current_event_consumed { break; }
+                        }
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -616,7 +577,7 @@ impl RmlEngine {
         let mut callbacks_with_event = Vec::new();
         
         match event {
-            // Mouse wheel - check which nodes are under current mouse position
+            // node related events
             SystemEvent::MouseWheel { node_id, .. }
             | SystemEvent::MouseMove { node_id, .. } 
             | SystemEvent::MouseDown { node_id, .. }
@@ -624,13 +585,19 @@ impl RmlEngine {
             | SystemEvent::Click { node_id, .. }
             | SystemEvent::MouseEnter { node_id }
             | SystemEvent::MouseLeave { node_id }
-            | SystemEvent::WindowResize { node_id, .. }
-            | SystemEvent::WindowFocus { node_id, .. }
-            | SystemEvent::WindowLostFocus { node_id, .. }
             | SystemEvent::KeyDown { node_id, .. }
             | SystemEvent::KeyUp { node_id, .. }
             | SystemEvent::KeyPressed { node_id, .. } => {
                 let handlers = self.event_manager.get_handlers_for_node(*node_id, &event_type);
+                for handler in handlers {
+                    callbacks_with_event.push((handler.callback_id, event.clone()));
+                }
+            },
+            // globals events
+            SystemEvent::WindowResize { .. }
+            | SystemEvent::WindowFocus { .. }
+            | SystemEvent::WindowLostFocus { .. } => {
+                let handlers = self.event_manager.get_handlers_for_event(&event_type);
                 for handler in handlers {
                     callbacks_with_event.push((handler.callback_id, event.clone()));
                 }
@@ -696,8 +663,8 @@ impl RmlEngine {
     fn is_point_inside_node(&self, node_id: NodeId, x: f32, y: f32) -> bool {
         // Use pre-computed absolute geometry from draw phase
         if let Some(node) = self.arena.get_node(node_id) {
-            let computed_abs_x = self.get_number_property_of_node(&node.id, "computed_absolute_x", 0.0);
-            let computed_abs_y = self.get_number_property_of_node(&node.id, "computed_absolute_y", 0.0);
+            let computed_abs_x = self.get_number_property_of_node(&node.id, "computed_x", 0.0);
+            let computed_abs_y = self.get_number_property_of_node(&node.id, "computed_y", 0.0);
             let computed_width = self.get_number_property_of_node(&node.id, "computed_width", 0.0);
             let computed_height = self.get_number_property_of_node(&node.id, "computed_height", 0.0);
             

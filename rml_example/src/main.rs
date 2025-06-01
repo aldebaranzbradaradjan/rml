@@ -190,17 +190,13 @@ async fn main() {
                     let mut x = get_number!(engine, outer_rect, x);
                     let mut y = get_number!(engine, outer_rect, y);
 
-                    if is_key_down(KeyCode::Right) {
-                        x += 1.0;
-                    }
-                    if is_key_down(KeyCode::Left) {
-                        x -= 1.0;
-                    }
-                    if is_key_down(KeyCode::Down) {
-                        y += 1.0;
-                    }
-                    if is_key_down(KeyCode::Up) {
-                        y -= 1.0;
+                    let key = get_key_event!(engine);
+                    match key {
+                        Some(KeyCode::Right) => x += 1.0,
+                        Some(KeyCode::Left) => x -= 1.0,
+                        Some(KeyCode::Down) => y += 1.0,
+                        Some(KeyCode::Up) => y -= 1.0,
+                        _ => (),
                     }
 
                     set_number!(engine, outer_rect, x, x);
