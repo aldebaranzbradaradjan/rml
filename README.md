@@ -83,6 +83,8 @@ This project is under active experimentation.
 
 * Add on_ready event and compute bindings in property initialization ✅
 
+* System events: Keyboard & mouse input & window events ✅
+
 ## Planned Features / TODO
 
 * Add an Image node type
@@ -93,13 +95,7 @@ This project is under active experimentation.
 
 * Load multiple files (e.g., external components)
 
-* System events:
-
-    * Keyboard & mouse input ✅
-
-    * Window events 
-
-    * Custom event definitions
+* Custom event definitions
 
 * Implement rapid setter / getter $ macro ( $.draggable.x = new_x; )
 
