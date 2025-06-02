@@ -1,5 +1,6 @@
 
 use std::collections::{HashMap};
+use macroquad::color::Color;
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 
@@ -79,6 +80,13 @@ impl ToTokens for Property {
     }
 }
 
+// impl ToTokens for Color {
+//     fn to_tokens(&self, tokens: &mut TokenStream) {
+//         let tokenized = quote! { Color::new(#self.r, #self.g, #self.b, #self.a) };
+//         tokenized.to_tokens(tokens);
+//     }
+// }
+
 // Used in macro crate to parse a value
 impl ToTokens for AbstractValue {
     fn to_tokens(&self, tokens: &mut TokenStream) {
@@ -86,6 +94,11 @@ impl ToTokens for AbstractValue {
             AbstractValue::Bool(b) => quote! { AbstractValue::Bool(#b) },
             AbstractValue::String(s) => quote! { AbstractValue::String(#s.to_string()) },
             AbstractValue::Number(n) => quote! { AbstractValue::Number(#n) },
+            AbstractValue::Color(c) => {
+                let tokenized = quote! { Color::new(#self.r, #self.g, #self.b, #self.a) };
+                tokenized.to_tokens(tokens);
+                quote! { #tokenized }
+            },
             AbstractValue::Array(arr) => {
                 let items = arr.iter().map(|item| quote! { #item });
                 quote! { AbstractValue::Array(vec![#(#items),*]) }

@@ -22,7 +22,7 @@ Rectangle {
     
     Text {
         anchors: center
-        text: { get_string!(engine, root_btn_template, text) }
+        text: { $.root_btn_template.text }
         color: "rgba(1.0, 1.0, 1.0, 1.0)"
         font_size: 16
     }
@@ -30,9 +30,9 @@ Rectangle {
     MouseArea {
         anchors: fill
         on_click: { emit!(engine, root_btn_template, click); }
-        on_mouse_down: { set_bool!(engine, root_btn_template, pushed, true); }
-        on_mouse_up: { set_bool!(engine, root_btn_template, pushed, false); }
-        on_mouse_enter: { set_bool!(engine, root_btn_template, hovered, true); }
-        on_mouse_leave: { set_bool!(engine, root_btn_template, hovered, false); }
+        on_mouse_down: { $.root_btn_template.pushed = true; }
+        on_mouse_up: { $.root_btn_template.pushed = false; }
+        on_mouse_enter: { $.root_btn_template.hovered = true; }
+        on_mouse_leave: { $.root_btn_template.hovered = false; }
     }
 }

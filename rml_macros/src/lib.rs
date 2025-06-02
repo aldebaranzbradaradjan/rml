@@ -75,6 +75,75 @@ fn format_code(code: &str) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
+fn transform_dollar_syntax(code: &str) -> String {
+    use regex::Regex;
+    
+    // Only transform if there are actually $ expressions
+    if !code.contains("$.") {
+        return code.to_string();
+    }
+    
+    let mut result = code.to_string();
+    
+    // Handle compound assignments first: $.node.prop += value;
+    let compound_assign_pattern = Regex::new(r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*([+\-*/])=\s*([^;]+)\s*;").unwrap();
+    result = compound_assign_pattern.replace_all(&result, |caps: &regex::Captures| {
+        let node_id = &caps[1];
+        let property = &caps[2];
+        let operator = &caps[3];
+        let value = &caps[4].trim();
+        
+        format!("set_number!(engine, {}, {}, get_number!(engine, {}, {}) {} {});", 
+                node_id, property, node_id, property, operator, value)
+    }).to_string();
+    
+    // Handle simple assignments: $.node.prop = value;
+    let assign_pattern = Regex::new(r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([^;]+)\s*;").unwrap();
+    result = assign_pattern.replace_all(&result, |caps: &regex::Captures| {
+        let node_id = &caps[1];
+        let property = &caps[2];
+        let value = &caps[3].trim();
+        
+        // Try to determine the type based on the value
+        if value.starts_with('"') || value.contains(".to_string()") || value.contains("String::") {
+            format!("set_string!(engine, {}, {}, {});", node_id, property, value)
+        } else if *value == "true" || *value == "false" {
+            format!("set_bool!(engine, {}, {}, {});", node_id, property, value)
+        } else {
+            format!("set_number!(engine, {}, {}, {});", node_id, property, value)
+        }
+    }).to_string();
+    
+    // Handle typed read operations first: $.node.prop:type
+    let typed_pattern = Regex::new(r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*):([a-zA-Z0-9_]+)\b").unwrap();
+    result = typed_pattern.replace_all(&result, |caps: &regex::Captures| {
+        let node_id = &caps[1];
+        let property = &caps[2];
+        let type_hint = &caps[3];
+        
+        match type_hint {
+            "f32" | "number" => format!("get_number!(engine, {}, {})", node_id, property),
+            "string" | "str" => format!("get_string!(engine, {}, {})", node_id, property),
+            "bool" => format!("get_bool!(engine, {}, {})", node_id, property),
+            _ => format!("get_value!(engine, {}, {})", node_id, property),
+        }
+    }).to_string();
+    
+    // Handle regular read operations: $.node.prop (in expressions)
+    // Be more careful to only match standalone expressions, not inside strings
+    let dollar_pattern = Regex::new(r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\b").unwrap();
+    result = dollar_pattern.replace_all(&result, |caps: &regex::Captures| {
+        let node_id = &caps[1];
+        let property = &caps[2];
+        
+        // Use the new get_value! macro that returns the AbstractValue
+        // The context will determine how it's used (to_string(), to_number(), etc.)
+        format!("get_value!(engine, {}, {})", node_id, property)
+    }).to_string();
+    
+    result
+}
+
 fn inject_engine_text_based(
     input: &str,
     engine_str: &str,
@@ -139,6 +208,7 @@ fn load_components_from_path(path: &str) -> Result<Vec<ComponentDefinition>, Box
             
             // Read and parse the component file
             let file_content = fs::read_to_string(&file_path)?;
+            let file_content = transform_dollar_syntax(&file_content);
             
             // Parse the RML content as a component
             if let Ok(component_node) = parse_component_content(&file_content) {
@@ -163,13 +233,25 @@ fn parse_component_content(content: &str) -> Result<RmlNode, Box<dyn std::error:
 
 #[proc_macro]
 pub fn rml(input: TokenStream) -> TokenStream {
+    // First, transform the input to replace $ syntax before parsing
+    let input_string = input.to_string();
+    let transformed_string = transform_dollar_syntax(&input_string);
+    
+    // Parse the transformed input
+    let transformed_input: TokenStream = match transformed_string.parse() {
+        Ok(tokens) => { println!("Transformed input"); tokens },
+        Err(_) => { println!("original input"); input }, // Fallback to original if transformation fails
+    };
+    
     // Try to parse as RmlParser first (with imports), fallback to RmlNode for backward compatibility
-    let (parsed_node, components) = if let Ok(rml_parser) = syn::parse::<RmlParser>(input.clone()) {
+    let (parsed_node, components) = if let Ok(rml_parser) = syn::parse::<RmlParser>(transformed_input.clone()) {
         (rml_parser.root_node, rml_parser.components)
     } else {
-        let parsed = parse_macro_input!(input as RmlNode);
+        let parsed = parse_macro_input!(transformed_input as RmlNode);
         (parsed, HashMap::new())
     };
+
+    println!("Components: {:#?}", components.keys());
     
     let generated = parsed_node.generate_with_components(&components);
     let generated_node = generated.1;
@@ -265,7 +347,6 @@ impl ToString for Value {
 }
 
 fn inject_engine_in_block(mut block: syn::Block, initializer: bool) -> syn::Block {
-    //use syn::{Expr, ExprCall, ExprPath, Stmt, Token};
     use syn::{Expr, Stmt};
 
     block.stmts = block
@@ -392,7 +473,7 @@ fn find_related_property_for_binding(id: String, property: String, block_string:
     for line in block_string.lines() {
         let trimmed_line = line.trim();
         
-        if trimmed_line.contains("get_number!") || trimmed_line.contains("get_string!") || 
+        if trimmed_line.contains("get_value!") ||trimmed_line.contains("get_number!") || trimmed_line.contains("get_string!") || 
            trimmed_line.contains("get_bool!") || trimmed_line.contains("get_color!") ||
            trimmed_line.contains("get_computed_x!") || trimmed_line.contains("get_computed_y!") || 
            trimmed_line.contains("get_computed_width!") || trimmed_line.contains("get_computed_height!") {
@@ -464,13 +545,16 @@ struct RmlParser {
 impl Parse for ImportStatement {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         // Parse "import" as an identifier
+        println!("Parse import statement");
         let import_keyword: Ident = input.parse()?;
         if import_keyword != "import" {
             return Err(syn::Error::new(import_keyword.span(), "Expected 'import'"));
         }
         
+        println!("Parse import path");
         let path_str: LitStr = input.parse()?;
         let path = path_str.value();
+        println!("Import path: {}", path);
         
         let alias = if input.peek(Token![as]) {
             input.parse::<Token![as]>()?;
@@ -479,6 +563,8 @@ impl Parse for ImportStatement {
         } else {
             None
         };
+
+        println!("Alias: {:#?}", alias);
         
         Ok(ImportStatement { path, alias })
     }
@@ -934,16 +1020,19 @@ impl RmlNode {
             // Replace in component code
             let component_str = component_code.to_string();
             let new_component_str = component_str.replace(&original_id, &new_id);
+            //let new_component_str = transform_dollar_syntax(&new_component_str);
             component_code = new_component_str.parse().unwrap_or(component_code);
             
             // Replace in functions code
             let functions_str = functions_code.to_string();
             let new_functions_str = functions_str.replace(&original_id, &new_id);
+            //let new_functions_str = transform_dollar_syntax(&new_functions_str);
             functions_code = new_functions_str.parse().unwrap_or(functions_code);
             
             // Replace in initializer code
             let initializer_str = initializer_code.to_string();
             let new_initializer_str = initializer_str.replace(&original_id, &new_id);
+            //let new_initializer_str = transform_dollar_syntax(&new_initializer_str);
             initializer_code = new_initializer_str.parse().unwrap_or(initializer_code);
         }
 

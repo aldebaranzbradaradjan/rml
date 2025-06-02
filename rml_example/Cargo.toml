@@ -15,6 +15,10 @@ path = "src/mousearea_test.rs"
 name = "component_test"
 path = "src/component_test.rs"
 
+[[bin]]
+name = "dollar_syntax_test"
+path = "src/dollar_syntax_test.rs"
+
 [dependencies]
 rml_core = { path = "../rml_core" }
 rml_macros = { path = "../rml_macros" }

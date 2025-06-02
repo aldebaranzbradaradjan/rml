@@ -3,7 +3,7 @@
 use macroquad::prelude::*;
 
 use std::collections::HashMap;
-use rml_core::{ RmlEngine, Property, AbstractValue, emit, get_bool, set_bool, decompose_color_string, get_number, set_number, get_string, get_key_event, SystemEvent, EventType, set_string, ItemTypeEnum};
+use rml_core::{ RmlEngine, Property, AbstractValue, emit, get_value, get_bool, set_bool, decompose_color_string, get_number, set_number, get_string, get_key_event, SystemEvent, EventType, set_string, ItemTypeEnum};
 use rml_macros::rml;
 
 fn window_conf() -> Conf {
@@ -40,7 +40,8 @@ async fn main() {
                 text: "Click Me!"
                 on_click: {
                     println!("Main button clicked!");
-                    set_string!(engine, info_card, content, "Main button clicked! (with unique ID) - see console output for more info about the event".to_string());
+                    $.main_button.margins = $.main_button.margins:f32 + 10.;
+                    $.info_card.content = "Main button clicked! (with unique ID) - see console output for more info about the event".to_string();
                 }
             }
 
@@ -51,7 +52,7 @@ async fn main() {
                 text: "Button 2"
                 on_click: {
                     println!("Second button clicked!");
-                    set_string!(engine, info_card, content, "Second button clicked! (with unique ID) - see console output for more info about the event".to_string());
+                    $.info_card.content = "Second button clicked! (with unique ID) - see console output for more info about the event".to_string();
                 }
             }
             
@@ -64,10 +65,9 @@ async fn main() {
                 count: 0
                 on_click: {
                     println!("Third button clicked!");
-                    let count = get_number!(engine, third_button, count) + 1.;
-                    set_number!(engine, third_button, count, count);
-                    set_string!(engine, third_button, text, format!("Clicked : {}", count));
-                    set_string!(engine, info_card, content, "Third button clicked! (with unique ID) - see console output for more info about the event".to_string());
+                    $.info_card.content = "Third button clicked! (with unique ID) - see console output for more info about the event".to_string();
+                    $.third_button.count = $.third_button.count:f32 + 1.;
+                    $.third_button.text = format!("Clicked : {}", $.third_button.count).to_string();
                 }
             }
             

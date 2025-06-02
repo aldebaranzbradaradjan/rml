@@ -35,6 +35,7 @@ pub enum AbstractValue {
     Bool(bool),
     String(String),
     Number(f32),
+    Color(Color),
     Array(Vec<AbstractValue>),
     Null,
 }
@@ -81,12 +82,25 @@ impl From<()> for AbstractValue {
     }
 }
 
+impl From<Color> for AbstractValue {
+    fn from(val: Color) -> Self {
+        AbstractValue::Color(val)
+    }
+}
+
+impl std::fmt::Display for AbstractValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
+}
+
 impl AbstractValue {
     pub fn to_string(&self) -> String {
         match self {
             AbstractValue::Bool(b) => b.to_string(),
             AbstractValue::String(s) => s.clone(),
             AbstractValue::Number(n) => n.to_string(),
+            AbstractValue::Color(c) => format!("rgba({}, {}, {}, {})", c.r, c.g, c.b, c.a),
             AbstractValue::Array(arr) => format!("{:?}", arr),
             AbstractValue::Null => "null".to_string(),
         }
@@ -108,23 +122,10 @@ impl AbstractValue {
 
     pub fn to_color(&self) -> Option<Color> {
         match self {
+            AbstractValue::Color(c) => Some(*c),
             AbstractValue::String(s) => {
                 let color_tuple = decompose_color_string(s);
                 Some(Color::new(color_tuple.0, color_tuple.1, color_tuple.2, color_tuple.3))
-
-                // let s = s.trim_start_matches("rgba(").trim_end_matches(")");
-                // let parts: Vec<&str> = s.split(',').map(|s| s.trim()).collect();
-
-                // //print!("parts: {:?}", parts);
-                // if parts.len() == 4 {
-                //     let r = parts[0].parse::<f32>().ok()?;
-                //     let g = parts[1].parse::<f32>().ok()?;
-                //     let b = parts[2].parse::<f32>().ok()?;
-                //     let a = parts[3].parse::<f32>().ok()?;
-                //     Some(Color::new(r, g, b, a))
-                // } else {
-                //     None
-                // }
             }
             _ => None,
         }

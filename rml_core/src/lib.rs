@@ -165,6 +165,43 @@ macro_rules! emit {
     }};
 }
 
+#[macro_export]
+macro_rules! get_value {
+    ($engine:expr, $node:ident, $prop:ident) => {{
+        // Get the raw AbstractValue - let the context determine how to use it
+        if let Some(prop_id) = $engine.get_property_id_of_node(stringify!($node), stringify!($prop)) {
+            if let Some(property) = $engine.get_property(prop_id) {
+                property.get().clone()
+            } else {
+                AbstractValue::Null
+            }
+        } else {
+            AbstractValue::Null
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! get_as_string {
+    ($engine:expr, $node:ident, $prop:ident) => {{
+        get_value!($engine, $node, $prop).to_string()
+    }};
+}
+
+#[macro_export]
+macro_rules! get_as_number {
+    ($engine:expr, $node:ident, $prop:ident) => {{
+        get_value!($engine, $node, $prop).to_number().unwrap_or(0.0)
+    }};
+}
+
+#[macro_export]
+macro_rules! get_as_bool {
+    ($engine:expr, $node:ident, $prop:ident) => {{
+        get_value!($engine, $node, $prop).to_bool().unwrap_or(false)
+    }};
+}
+
 pub fn decompose_color_string(color_string: &str) -> (f32, f32, f32, f32) {
     //"rgba(0.4, 0.9, 0.7, 1.0)"
     // remove rgba( and )
