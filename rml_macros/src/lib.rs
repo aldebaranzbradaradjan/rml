@@ -23,6 +23,7 @@ enum PropertyKey {
         base: Ident, 
         field: Ident 
     },
+    Signal(Ident),
 }
 
 // struct to represent an import statement
@@ -44,11 +45,16 @@ impl PropertyKey {
         match self {
             PropertyKey::Simple(ident) => ident.to_string(),
             PropertyKey::Composed { base, field } => format!("{}_{}", base, field),
+            PropertyKey::Signal(ident) => ident.to_string(),
         }
     }
     
     fn to_ident(&self) -> Ident {
         format_ident!("{}", self.to_string())
+    }
+    
+    fn is_signal(&self) -> bool {
+        matches!(self, PropertyKey::Signal(_))
     }
 }
 
@@ -537,6 +543,22 @@ impl Parse for RmlNode {
                 }
             }
             else {
+                // Check for signal declaration first
+                if content.peek(Ident) {
+                    let fork = content.fork();
+                    if let Ok(signal_keyword) = fork.parse::<Ident>() {
+                        if signal_keyword == "signal" {
+                            // parse signal declaration: signal identifier
+                            content.parse::<Ident>()?; // consume "signal" string
+                            let signal_name: Ident = content.parse()?;
+                            content.parse::<Token![,]>().ok();
+                            // add signal as a special property
+                            properties.push((PropertyKey::Signal(signal_name), Value::Ident(Ident::new("signal", Span::call_site()))));
+                            continue;
+                        }
+                    }
+                }
+                
                 // will try to parse the property first
                 let fork = content.fork();
                 
@@ -746,8 +768,15 @@ impl RmlNode {
                 let k_string = k.to_string();
                 let k_ident = k.to_ident();
                 
-                if k_string.starts_with("on_") && k_string.ends_with("_changed") {
-                    // Property change callbacks (existing functionality)
+                // Handle signal declarations
+                if k.is_signal() {
+                    // Signal declaration - create a signal property
+                    quote! {
+                        let prop_id = engine.add_property(Property::new(AbstractValue::Null));
+                        engine.add_property_to_node(#temp_node, stringify!(#k_ident).to_string(), prop_id);
+                    }
+                } else if k_string.starts_with("on_") && k_string.ends_with("_changed") {
+                    // Property change callbacks
                     let observed = k_string.trim_start_matches("on_").trim_end_matches("_changed");
                     if let Value::Block(block) = v {
                         quote! {
@@ -758,44 +787,62 @@ impl RmlNode {
                         quote! {}
                     }
                 } else if k_string.starts_with("on_") {
-                    // System event handlers
                     let event_name = k_string.trim_start_matches("on_");
                     
-                    // Check if this is a mouse event and if we're in a MouseArea
-                    let is_mouse_event = matches!(event_name, 
-                        "mouse_down" | "mouse_up" | "mouse_move" | "mouse_wheel" | 
-                        "mouse_enter" | "mouse_leave" | "click"
-                    );
+                    // Check if this is a custom signal handler
+                    let is_custom_signal = self.properties.iter().any(|(prop_key, _)| {
+                        prop_key.is_signal() && prop_key.to_string() == event_name
+                    });
                     
-                    if is_mouse_event && node_type != ItemTypeEnum::MouseArea {
-                        // Mouse events are only allowed on MouseArea nodes
-                        panic!("Mouse events can only be used in MouseArea nodes");
-                    }
-                    
-                    let event_type = match event_name {
-                        "key_down" => quote! { EventType::KeyDown },
-                        "key_up" => quote! { EventType::KeyUp },
-                        "key_pressed" => quote! { EventType::KeyPressed },
-                        "mouse_down" => quote! { EventType::MouseDown },
-                        "mouse_up" => quote! { EventType::MouseUp },
-                        "mouse_move" => quote! { EventType::MouseMove },
-                        "mouse_wheel" => quote! { EventType::MouseWheel },
-                        "mouse_enter" => quote! { EventType::MouseEnter },
-                        "mouse_leave" => quote! { EventType::MouseLeave },
-                        "click" => quote! { EventType::Click },
-                        "window_resize" => quote! { EventType::WindowResize },
-                        "window_focus" => quote! { EventType::WindowFocus },
-                        "window_lost_focus" => quote! { EventType::WindowLostFocus },
-                        _ => return quote! {}, // Unknown event type
-                    };
-                    
-                    if let Value::Block(block) = v {
-                        quote! {
-                            let cb_id = engine.add_callback( |engine| #block );
-                            engine.add_event_handler( #event_type, #id, cb_id );
+                    if is_custom_signal {
+                        // Custom signal handler
+                        if let Value::Block(block) = v {
+                            quote! {
+                                let cb_id = engine.add_callback( |engine| #block );
+                                engine.bind_node_property_to_callback( #id, #event_name, cb_id );
+                            }
+                        } else {
+                            quote! {}
                         }
                     } else {
-                        quote! {}
+                        // System event handlers
+                        
+                        // Check if this is a mouse event and if we're in a MouseArea
+                        let is_mouse_event = matches!(event_name, 
+                            "mouse_down" | "mouse_up" | "mouse_move" | "mouse_wheel" | 
+                            "mouse_enter" | "mouse_leave" | "click"
+                        );
+                        
+                        if is_mouse_event && node_type != ItemTypeEnum::MouseArea {
+                            // Mouse events are only allowed on MouseArea nodes
+                            panic!("Mouse events can only be used in MouseArea nodes");
+                        }
+                        
+                        let event_type = match event_name {
+                            "key_down" => quote! { EventType::KeyDown },
+                            "key_up" => quote! { EventType::KeyUp },
+                            "key_pressed" => quote! { EventType::KeyPressed },
+                            "mouse_down" => quote! { EventType::MouseDown },
+                            "mouse_up" => quote! { EventType::MouseUp },
+                            "mouse_move" => quote! { EventType::MouseMove },
+                            "mouse_wheel" => quote! { EventType::MouseWheel },
+                            "mouse_enter" => quote! { EventType::MouseEnter },
+                            "mouse_leave" => quote! { EventType::MouseLeave },
+                            "click" => quote! { EventType::Click },
+                            "window_resize" => quote! { EventType::WindowResize },
+                            "window_focus" => quote! { EventType::WindowFocus },
+                            "window_lost_focus" => quote! { EventType::WindowLostFocus },
+                            _ => return quote! {}, // Unknown event type
+                        };
+                        
+                        if let Value::Block(block) = v {
+                            quote! {
+                                let cb_id = engine.add_callback( |engine| #block );
+                                engine.add_event_handler( #event_type, #id, cb_id );
+                            }
+                        } else {
+                            quote! {}
+                        }
                     }
                 } else {
                     let value = match v {

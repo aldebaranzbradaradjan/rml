@@ -155,6 +155,30 @@ macro_rules! get_key_event {
     }};
 }
 
+#[macro_export]
+macro_rules! emit {
+    ($engine:expr, $node:ident, $signal:ident) => {{
+        // Emit a signal by setting the signal property to trigger callbacks
+        // We use a toggle mechanism to ensure the signal always triggers
+        let current_value = $engine.get_bool_property_of_node(stringify!($node), stringify!($signal), false);
+        $engine.set_property_of_node(stringify!($node), stringify!($signal), AbstractValue::Bool(!current_value))
+    }};
+}
+
+pub fn decompose_color_string(color_string: &str) -> (f32, f32, f32, f32) {
+    //"rgba(0.4, 0.9, 0.7, 1.0)"
+    // remove rgba( and )
+    // split by comma
+    // parse each part as f32
+    let s = color_string.trim_start_matches("rgba(").trim_end_matches(")");
+    let parts: Vec<&str> = s.split(',').map(|s| s.trim()).collect();
+    let r = parts[0].parse::<f32>().unwrap();
+    let g = parts[1].parse::<f32>().unwrap();
+    let b = parts[2].parse::<f32>().unwrap();
+    let a = parts[3].parse::<f32>().unwrap();
+    (r, g, b, a)
+}
+
 pub struct RmlEngine {
     arena: ArenaTree,
     properties: HashMap<PropertyId, Property>,
@@ -326,20 +350,12 @@ impl RmlEngine {
             if let Some(node) = self.arena.get_node_mut(*node_id) {
                 if let Some(property_id) = node.get_property(property_name) {
                     if let Some(property) = self.get_property_mut(property_id) {
-                        
-                        //println!("set_property_of_node: node_name: {}, property_name: {}", node_name, property_name);
-
                         // test if value changed
-                        if property.get() == value {
-                            return false;
-                        }
+                        if property.get() == value { return false; }
                         property.set(value);
-
-                        //println!("value setted");
 
                         if let Some(callback_ids) = self.bindings.get(&property_id) {
                             for &cb_id in callback_ids {
-                                println!("callback id: {}", cb_id);
                                 self.callbacks_to_eval.push(cb_id);
                             }
                         }

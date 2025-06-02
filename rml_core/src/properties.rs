@@ -1,4 +1,5 @@
 use macroquad::color::Color;
+use crate::decompose_color_string;
 
 pub struct Property {
     pub value: AbstractValue,
@@ -108,24 +109,22 @@ impl AbstractValue {
     pub fn to_color(&self) -> Option<Color> {
         match self {
             AbstractValue::String(s) => {
-                //"rgba(1.0, 0.0, 0.0, 1.0)"
-                // remove rgba( and )
-                // split by comma
-                // parse each part as f32
-                
-                let s = s.trim_start_matches("rgba(").trim_end_matches(")");
-                let parts: Vec<&str> = s.split(',').map(|s| s.trim()).collect();
+                let color_tuple = decompose_color_string(s);
+                Some(Color::new(color_tuple.0, color_tuple.1, color_tuple.2, color_tuple.3))
 
-                //print!("parts: {:?}", parts);
-                if parts.len() == 4 {
-                    let r = parts[0].parse::<f32>().ok()?;
-                    let g = parts[1].parse::<f32>().ok()?;
-                    let b = parts[2].parse::<f32>().ok()?;
-                    let a = parts[3].parse::<f32>().ok()?;
-                    Some(Color::new(r, g, b, a))
-                } else {
-                    None
-                }
+                // let s = s.trim_start_matches("rgba(").trim_end_matches(")");
+                // let parts: Vec<&str> = s.split(',').map(|s| s.trim()).collect();
+
+                // //print!("parts: {:?}", parts);
+                // if parts.len() == 4 {
+                //     let r = parts[0].parse::<f32>().ok()?;
+                //     let g = parts[1].parse::<f32>().ok()?;
+                //     let b = parts[2].parse::<f32>().ok()?;
+                //     let a = parts[3].parse::<f32>().ok()?;
+                //     Some(Color::new(r, g, b, a))
+                // } else {
+                //     None
+                // }
             }
             _ => None,
         }
