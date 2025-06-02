@@ -89,31 +89,26 @@ This project is under active experimentation.
 
 * Optional scoped IDs: isolate ID usage per file (limited to root node of a file) ✅
 
+* Custom event definitions ✅
+
 ## Planned Features / TODO (order by interest)
 
-* Custom event definitions
+* Implement rapid setter / getter $ macro ( $.draggable.x = new_x; )
 
 * Add an Image node type
 
 * Add tests
 
-* Implement rapid setter / getter $ macro ( $.draggable.x = new_x; )
-
 * Layout & positioning:
     * Layout system
-
     * Positioning items: Column, Row, Grid; compatible with anchors and the layout system
 
 * Data models:
-
     * ListModel, TableModel via declarative Rust macros
-
     * Support for field access, sorting, and filtering
 
 * Resource system:
-
     * Declare and include assets (e.g., images, fonts) from a folder
-
     * Bundle with executable
 
 * Rename to CML (Cute Markup Language)
