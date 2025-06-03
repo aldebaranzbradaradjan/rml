@@ -3,7 +3,7 @@
 use macroquad::prelude::*;
 
 use std::collections::HashMap;
-use rml_core::{ RmlEngine, Property, AbstractValue, emit, get_value, get_bool, set_bool, decompose_color_string, get_number, set_number, get_string, get_key_event, SystemEvent, EventType, set_string, ItemTypeEnum};
+use rml_core::{ RmlEngine, Property, AbstractValue, emit, darker_color, lighter_color, get_color, get_value, get_bool, set_bool, decompose_color_string, get_number, set_number, get_string, get_key_event, SystemEvent, EventType, set_string, ItemTypeEnum};
 use rml_macros::rml;
 
 fn window_conf() -> Conf {

@@ -175,28 +175,23 @@ macro_rules! get_value {
     }};
 }
 
-// #[macro_export]
-// macro_rules! get_as_string {
-//     ($engine:expr, $node:ident, $prop:ident) => {{
-//         get_value!($engine, $node, $prop).to_string()
-//     }};
-// }
+pub fn lighter_color(color: Color, amount: f32) -> Color {
+    let mut color = color;
+    color.r += amount;
+    color.g += amount;
+    color.b += amount;
+    color
+}
 
-// #[macro_export]
-// macro_rules! get_as_number {
-//     ($engine:expr, $node:ident, $prop:ident) => {{
-//         get_value!($engine, $node, $prop).to_number().unwrap_or(0.0)
-//     }};
-// }
+pub fn darker_color(color: Color, amount: f32) -> Color {
+    let mut color = color;
+    color.r -= amount;
+    color.g -= amount;
+    color.b -= amount;
+    color
+}
 
-// #[macro_export]
-// macro_rules! get_as_bool {
-//     ($engine:expr, $node:ident, $prop:ident) => {{
-//         get_value!($engine, $node, $prop).to_bool().unwrap_or(false)
-//     }};
-//}
-
-pub fn decompose_color_string(color_string: &str) -> (f32, f32, f32, f32) {
+pub fn decompose_color_string(color_string: &str) -> Color {
     //"rgba(0.4, 0.9, 0.7, 1.0)"
     // remove rgba( and )
     // split by comma
@@ -207,7 +202,9 @@ pub fn decompose_color_string(color_string: &str) -> (f32, f32, f32, f32) {
     let g = parts[1].parse::<f32>().unwrap();
     let b = parts[2].parse::<f32>().unwrap();
     let a = parts[3].parse::<f32>().unwrap();
-    (r, g, b, a)
+
+    //Color::from_rgba(r as u8, g as u8, b as u8, a as u8)
+    Color::new(r, g, b, a)
 }
 
 pub struct RmlEngine {

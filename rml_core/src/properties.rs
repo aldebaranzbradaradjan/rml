@@ -124,8 +124,7 @@ impl AbstractValue {
         match self {
             AbstractValue::Color(c) => Some(*c),
             AbstractValue::String(s) => {
-                let color_tuple = decompose_color_string(s);
-                Some(Color::new(color_tuple.0, color_tuple.1, color_tuple.2, color_tuple.3))
+                Some( decompose_color_string(s) )
             }
             _ => None,
         }

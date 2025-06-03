@@ -80,12 +80,12 @@ async fn main() {
                 margins: 50
                 width: 120
                 height: 40
-                color: "rgba(0.8, 0.3, 0.3, 1.0)"
+                color: { Color::new(0.8, 0.3, 0.3, 1.0) }
                 
                 Text {
                     anchors: center
                     text: "Decrement"
-                    color: "rgba(1.0, 1.0, 1.0, 1.0)"
+                    color: { WHITE }
                     font_size: 14
                 }
                 

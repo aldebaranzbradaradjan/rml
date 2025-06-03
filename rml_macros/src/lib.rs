@@ -58,6 +58,21 @@ impl PropertyKey {
     }
 }
 
+fn format_code_for_binding_extraction(code: &str) -> String {
+    // remove line jumps;
+    let mut code = code.replace("\n", "").replace("\r", "");
+    // add line jump before get macro calls
+    let macros = [ "get_value!", "get_number!", "get_string!",
+    "get_bool!", "get_color!", "get_computed_x!", "get_computed_y!",
+    "get_computed_width!", "get_computed_height!",
+    "get_number_property_of_node", "get_string_property_of_node", "get_bool_property_of_node",
+    "get_color_property_of_node", "get_property_of_node" ];
+    for macro_name in macros {
+        code = code.replace(macro_name, &format!("\n{}", macro_name));
+    }
+    code.to_string()
+}
+
 fn format_code(code: &str) -> String {
     let mut rustfmt = Command::new("rustfmt")
         .stdin(Stdio::piped())
@@ -125,6 +140,7 @@ fn transform_dollar_syntax(code: &str) -> String {
             "f32" | "number" => format!("get_number!(engine, {}, {})", node_id, property),
             "string" | "str" => format!("get_string!(engine, {}, {})", node_id, property),
             "bool" => format!("get_bool!(engine, {}, {})", node_id, property),
+            "color" => format!("get_color!(engine, {}, {})", node_id, property),
             _ => format!("get_value!(engine, {}, {})", node_id, property),
         }
     }).to_string();
@@ -463,6 +479,7 @@ fn find_related_property_for_binding(id: String, property: String, block_string:
     // outer_rect_width / 2.0 - inner_rect_width / 2.0
     // }"
     // will return [(outer_rect, width), (inner_rect, width)]
+    let block_string = format_code_for_binding_extraction(block_string.as_str());
     let mut related_properties = Vec::new();
     
     // if in block we find get_number!, get_string!, get_bool!, get_color!
@@ -472,6 +489,8 @@ fn find_related_property_for_binding(id: String, property: String, block_string:
     // we will add it to related_properties
     for line in block_string.lines() {
         let trimmed_line = line.trim();
+
+        println!("Line: {}", trimmed_line);
         
         if trimmed_line.contains("get_value!") ||trimmed_line.contains("get_number!") || trimmed_line.contains("get_string!") || 
            trimmed_line.contains("get_bool!") || trimmed_line.contains("get_color!") ||

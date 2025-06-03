@@ -8,51 +8,38 @@ Not intended for production use — just have fun!
 ## Example
 ```rust
 let mut engine = rml!(
-    Node {
-        id: root
-        width: 500.0
-        height: 500.0
+    Rectangle {
+        id: root_btn_template
+        width: 100
+        height: 40
+        text: "Button"
+        base_color: { Color::new(0.3, 0.8, 0.6, 1.0) }
+        hovered: false
+        pushed: false
 
-        // A rectangle anchored to fill the root node
-        Rectangle {
-            width: 10
-            height: 10
+        color: {
+            let mut color = $.root_btn_template.base_color:color;
+            if $.root_btn_template.pushed:bool { darker_color(color, 0.1) }
+            else if $.root_btn_template.hovered:bool { lighter_color(color, 0.1) }
+            else { color }
+        }
+
+        signal click
+        
+        Text {
+            anchors: center
+            text: { $.root_btn_template.text }
+            color: { WHITE }
+            font_size: 16
+        }
+        
+        MouseArea {
             anchors: fill
-            color: "rgba(1.0, 0.0, 0.0, 0.3)"
-        }
-
-        // Same, but with margins
-        Rectangle {
-            width: 10
-            height: 10
-            anchors: fill
-            margins: 50
-            color: "rgba(0.0, 1.0, 0.0, 0.3)"
-        }
-
-        // Top-left corner
-        Rectangle {
-            width: 10
-            height: 10
-            anchors: top | left
-            color: "rgba(0.0, 1.0, 0.0, 1.0)"
-        }
-
-        // Top-right corner
-        Rectangle {
-            width: 10
-            height: 10
-            anchors: top | right
-            color: "rgba(0.0, 0.0, 1.0, 1.0)"
-        }
-
-        // Bottom bar
-        Rectangle {
-            anchors: left | right | bottom
-            bottom_margin: 10
-            width: 10
-            height: 10
-            color: "rgba(1.0, 0.0, 0.0, 1.0)"
+            on_click: { emit!(engine, root_btn_template, click); }
+            on_mouse_down: { $.root_btn_template.pushed = true; }
+            on_mouse_up: { $.root_btn_template.pushed = false; }
+            on_mouse_enter: { $.root_btn_template.hovered = true; }
+            on_mouse_leave: { $.root_btn_template.hovered = false; }
         }
     }
 );
@@ -91,9 +78,9 @@ This project is under active experimentation.
 
 * Custom event definitions ✅
 
-## Planned Features / TODO (order by interest)
+* Implement rapid setter / getter $ macro ( $.draggable.x = new_x; ) there is some limitations but it's nice ✅
 
-* Implement rapid setter / getter $ macro ( $.draggable.x = new_x; )
+## Planned Features / TODO (order by interest)
 
 * Add an Image node type
 
