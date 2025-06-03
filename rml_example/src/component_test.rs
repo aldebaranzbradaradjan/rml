@@ -40,7 +40,6 @@ async fn main() {
                 text: "Click Me!"
                 on_click: {
                     println!("Main button clicked!");
-                    $.main_button.margins = $.main_button.margins:f32 + 10.;
                     $.info_card.content = "Main button clicked! (with unique ID) - see console output for more info about the event".to_string();
                 }
             }
@@ -66,7 +65,14 @@ async fn main() {
                 on_click: {
                     println!("Third button clicked!");
                     $.info_card.content = "Third button clicked! (with unique ID) - see console output for more info about the event".to_string();
-                    $.third_button.count = $.third_button.count:f32 + 1.;
+                    $.third_button.count += 1.;
+                    /* 
+                    same as : $.third_button.count = $.third_button.count:f32 + 1.; 
+                    note the :f32 to indicate to the macro that we need a f32 conversion
+                    same as $.third_button.count = $.third_button.count.to_number().unwrap() + 1.;
+                    */
+                    
+                    // in some case, the contexte is sufficient to infer the type
                     $.third_button.text = format!("Clicked : {}", $.third_button.count).to_string();
                 }
             }

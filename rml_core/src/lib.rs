@@ -102,12 +102,6 @@ macro_rules! get_computed_height {
     }};
 }
 
-#[macro_export]
-macro_rules! consume_current_event {
-    ($engine:expr) => {{
-        $engine.current_event_consumed = true;
-    }};
-}
 
 #[macro_export]
 macro_rules! get_mouse_wheel_delta_x {
@@ -181,26 +175,26 @@ macro_rules! get_value {
     }};
 }
 
-#[macro_export]
-macro_rules! get_as_string {
-    ($engine:expr, $node:ident, $prop:ident) => {{
-        get_value!($engine, $node, $prop).to_string()
-    }};
-}
+// #[macro_export]
+// macro_rules! get_as_string {
+//     ($engine:expr, $node:ident, $prop:ident) => {{
+//         get_value!($engine, $node, $prop).to_string()
+//     }};
+// }
 
-#[macro_export]
-macro_rules! get_as_number {
-    ($engine:expr, $node:ident, $prop:ident) => {{
-        get_value!($engine, $node, $prop).to_number().unwrap_or(0.0)
-    }};
-}
+// #[macro_export]
+// macro_rules! get_as_number {
+//     ($engine:expr, $node:ident, $prop:ident) => {{
+//         get_value!($engine, $node, $prop).to_number().unwrap_or(0.0)
+//     }};
+// }
 
-#[macro_export]
-macro_rules! get_as_bool {
-    ($engine:expr, $node:ident, $prop:ident) => {{
-        get_value!($engine, $node, $prop).to_bool().unwrap_or(false)
-    }};
-}
+// #[macro_export]
+// macro_rules! get_as_bool {
+//     ($engine:expr, $node:ident, $prop:ident) => {{
+//         get_value!($engine, $node, $prop).to_bool().unwrap_or(false)
+//     }};
+//}
 
 pub fn decompose_color_string(color_string: &str) -> (f32, f32, f32, f32) {
     //"rgba(0.4, 0.9, 0.7, 1.0)"
