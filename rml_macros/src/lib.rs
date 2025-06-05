@@ -259,7 +259,7 @@ pub fn rml(input: TokenStream) -> TokenStream {
         Err(_) => { println!("original input"); input }, // Fallback to original if transformation fails
     };
     
-    // Try to parse as RmlParser first (with imports), fallback to RmlNode for backward compatibility
+    //Try to parse as RmlParser first (with imports), fallback to RmlNode for backward compatibility
     let (parsed_node, components) = if let Ok(rml_parser) = syn::parse::<RmlParser>(transformed_input.clone()) {
         (rml_parser.root_node, rml_parser.components)
     } else {
@@ -267,7 +267,13 @@ pub fn rml(input: TokenStream) -> TokenStream {
         (parsed, HashMap::new())
     };
 
-    println!("Components: {:#?}", components.keys());
+
+    // let (parsed_node, components) = {
+    //     let parsed = parse_macro_input!(transformed_input as RmlNode);
+    //     (parsed, HashMap::new())
+    // };
+
+    //println!("Components: {:#?}", components.keys());
     
     let generated = parsed_node.generate_with_components(&components);
     let generated_node = generated.1;
@@ -489,8 +495,6 @@ fn find_related_property_for_binding(id: String, property: String, block_string:
     // we will add it to related_properties
     for line in block_string.lines() {
         let trimmed_line = line.trim();
-
-        println!("Line: {}", trimmed_line);
         
         if trimmed_line.contains("get_value!") ||trimmed_line.contains("get_number!") || trimmed_line.contains("get_string!") || 
            trimmed_line.contains("get_bool!") || trimmed_line.contains("get_color!") ||
@@ -549,7 +553,7 @@ fn find_related_property_for_binding(id: String, property: String, block_string:
 /// Struct to parse a Node
 #[derive(Clone)]
 struct RmlNode {
-    _ident: Ident,
+    _ident: String,
     properties: Vec<(PropertyKey, Value)>,
     children: Vec<RmlNode>,
     functions: Vec<syn::ItemFn>,
@@ -564,16 +568,13 @@ struct RmlParser {
 impl Parse for ImportStatement {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         // Parse "import" as an identifier
-        println!("Parse import statement");
         let import_keyword: Ident = input.parse()?;
         if import_keyword != "import" {
             return Err(syn::Error::new(import_keyword.span(), "Expected 'import'"));
         }
         
-        println!("Parse import path");
         let path_str: LitStr = input.parse()?;
         let path = path_str.value();
-        println!("Import path: {}", path);
         
         let alias = if input.peek(Token![as]) {
             input.parse::<Token![as]>()?;
@@ -609,6 +610,8 @@ impl Parse for RmlParser {
                             } else {
                                 component.name.clone()
                             };
+                            
+                            println!("Component name: {}", component_name);
                             components.insert(component_name, component);
                         }
                     }
@@ -630,7 +633,18 @@ impl Parse for RmlParser {
 
 impl Parse for RmlNode {
     fn parse(input: ParseStream) -> syn::Result<Self> {
+
+        // node name can be a sigle Ident or Ident . Ident
         let _ident: Ident = input.parse()?;
+        let mut _ident = _ident.to_string();    
+        if input.peek(Token![::]) {
+            input.parse::<Token![::]>()?;
+            let second_ident: Ident = input.parse()?;
+            _ident = format!("{}::{}", _ident, second_ident.to_string());
+        }
+
+        println!("Node name: {}", _ident);
+
         let content;
         syn::braced!(content in input);
 

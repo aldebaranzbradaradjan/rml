@@ -1,4 +1,4 @@
-//use std::collections::HashMap;
+
 pub mod properties;
 pub mod arena;
 pub mod draw;
@@ -732,3 +732,30 @@ impl RmlEngine {
 
 }
 
+pub mod prelude {
+    pub use macroquad::prelude::*;
+    pub use std::collections::HashMap;
+
+    pub use super::{
+        RmlEngine,
+        Property,
+        AbstractValue,
+        get_value,
+        get_bool,
+        set_bool,
+        get_number,
+        set_number,
+        get_string,
+        set_string,
+        darker_color,
+        lighter_color,
+        get_color,
+        emit,
+        EventType,
+        ItemTypeEnum,
+        decompose_color_string,
+        get_key_event,
+        SystemEvent,
+        NodeId
+    };
+}

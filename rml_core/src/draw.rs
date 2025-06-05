@@ -1,6 +1,5 @@
 use macroquad::prelude::*;
 use crate::{RmlEngine, ItemTypeEnum};
-use std::collections::VecDeque;
 
 #[derive(Debug, Clone, PartialEq)]
 enum Anchor {
