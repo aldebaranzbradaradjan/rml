@@ -73,6 +73,147 @@ fn format_code_for_binding_extraction(code: &str) -> String {
     code.to_string()
 }
 
+/// Extrait l'ID d'un nœud à partir de ses propriétés
+fn extract_node_id(node: &RmlNode) -> Option<String> {
+    node.properties.iter().find_map(|(k, v)| {
+        if k.to_string() == "id" { 
+            Some(v.to_string()) 
+        } else { 
+            None 
+        }
+    })
+}
+
+/// Applique les propriétés d'une instance sur un composant résolu
+fn apply_instance_properties(
+    resolved_component: &mut RmlNode,
+    instance_properties: &[(PropertyKey, Value)]
+) {
+    for (prop_key, prop_value) in instance_properties {
+        if let Some(existing_prop) = resolved_component.properties.iter_mut()
+            .find(|(k, _)| k.to_string() == prop_key.to_string()) {
+            // Écrase la propriété existante
+            existing_prop.1 = prop_value.clone();
+        } else {
+            // Ajoute une nouvelle propriété
+            resolved_component.properties.push((prop_key.clone(), prop_value.clone()));
+        }
+    }
+}
+
+/// Résout un composant unique : gère ID, propriétés, enfants et références
+/// Construit le contexte local d'un composant en résolvant récursivement ses imports
+/// 
+/// Version qui reconstruit le contexte complet mais avec la logique simplifiée.
+/// Chaque composant doit avoir accès à tous les autres, pré-résolus avec leurs dépendances.
+fn build_component_context(
+    component_imports: &[ImportStatement],
+    raw_components: &HashMap<String, (String, String)>,
+    current_component_name: &str
+) -> Result<HashMap<String, ComponentDefinition>, Box<dyn std::error::Error>> {
+    let mut context = HashMap::new();
+    
+    for import in component_imports {
+        if import.path == "." {
+            // Pour chaque import ".", ajoute TOUS les composants du dossier avec résolution
+            for (other_name, (other_content, _)) in raw_components {
+                if other_name != current_component_name {
+                    // Parse avec contexte pour capturer les imports de ce composant
+                    if let Ok((other_node, other_imports)) = parse_component_content_with_context(other_content) {
+                        // Construit récursivement le contexte pour ce composant
+                        let other_context = build_simple_context(&other_imports, raw_components, other_name)?;
+                        
+                        // Résout le composant avec son contexte local
+                        let resolved_node = resolve_nested_components(other_node, &other_context);
+                        
+                        // Ajoute avec l'alias approprié
+                        let full_name = if let Some(alias) = &import.alias {
+                            format!("{}::{}", alias, other_name)
+                        } else {
+                            other_name.clone()
+                        };
+                        
+                        context.insert(full_name, ComponentDefinition {
+                            name: other_name.clone(),
+                            node: resolved_node,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    
+    Ok(context)
+}
+
+/// Version simplifiée qui ne fait pas de résolution récursive (pour éviter la récursion infinie)
+fn build_simple_context(
+    component_imports: &[ImportStatement],
+    raw_components: &HashMap<String, (String, String)>,
+    current_component_name: &str
+) -> Result<HashMap<String, ComponentDefinition>, Box<dyn std::error::Error>> {
+    let mut context = HashMap::new();
+    
+    for import in component_imports {
+        if import.path == "." {
+            for (other_name, (other_content, _)) in raw_components {
+                if other_name != current_component_name {
+                    // Parse simple - pas de résolution récursive ici
+                    if let Ok(other_node) = parse_component_content(other_content) {
+                        let full_name = if let Some(alias) = &import.alias {
+                            format!("{}::{}", alias, other_name)
+                        } else {
+                            other_name.clone()
+                        };
+                        
+                        context.insert(full_name, ComponentDefinition {
+                            name: other_name.clone(),
+                            node: other_node,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    
+    Ok(context)
+}
+
+fn resolve_single_component(
+    instance_node: &RmlNode,
+    component_def: &ComponentDefinition,
+    components: &HashMap<String, ComponentDefinition>
+) -> RmlNode {
+    println!("resolve_single_component: {} -> {}", instance_node._ident, component_def.name);
+    
+    // Clone la définition du composant comme base
+    let mut resolved_component = component_def.node.clone();
+    
+    // === GESTION DES IDS ===
+    let original_id = extract_node_id(&resolved_component);
+    let new_id = extract_node_id(instance_node);
+    
+    println!("resolve_single_component: original_id={:?}, new_id={:?}", original_id, new_id);
+    
+    // === PROPAGATION DES PROPRIÉTÉS D'INSTANCE ===
+    apply_instance_properties(&mut resolved_component, &instance_node.properties);
+    
+    // === FUSION DES ENFANTS ET FONCTIONS ===
+    resolved_component.children.extend(instance_node.children.clone());
+    resolved_component.functions.extend(instance_node.functions.clone());
+    
+    // === MISE À JOUR DES RÉFÉRENCES D'ID ===
+    if let (Some(orig_id), Some(new_id_val)) = (original_id, new_id) {
+        if orig_id != new_id_val {
+            println!("resolve_single_component: ID change detected '{}' -> '{}'", orig_id, new_id_val);
+            resolved_component = update_node_id_references(resolved_component, &orig_id, &new_id_val);
+        }
+    }
+    
+    // === RÉSOLUTION RÉCURSIVE ===
+    resolve_nested_components(resolved_component, components)
+}
+
 fn update_node_id_references(mut node: RmlNode, original_id: &str, new_id: &str) -> RmlNode {
     // Update property values that might contain references to the old ID
     for (_, prop_value) in &mut node.properties {
@@ -245,99 +386,73 @@ fn inject_engine_text_based(
     output
 }
 
+/// Charge tous les composants d'un dossier avec résolution complète des dépendances
+/// 
+/// Cette fonction implémente un système d'extraction de composants par fichier pour éviter
+/// les collisions entre différents contextes d'import. Chaque composant est résolu avec 
+/// son propre contexte local d'imports.
+/// 
+/// Fonctionnement en 2 passes :
+/// 1. **Première passe** : Lecture brute de tous les fichiers .rml du dossier
+/// 2. **Deuxième passe** : Résolution récursive des dépendances pour chaque composant
+/// 
+/// # Arguments
+/// * `path` - Chemin vers le dossier contenant les composants .rml
+/// 
+/// # Exemple de scénario géré
+/// ```
+/// // Button.rml: import "." ; utilise OwnRect
+/// // ButtonRed.rml: import "." ; utilise Button  
+/// // CounterCard.rml: import "." ; utilise ButtonRed
+/// // -> CounterCard → ButtonRed → Button → OwnRect (résolution à 3+ niveaux)
+/// ```
 fn load_components_from_path_with_context(path: &str) -> Result<HashMap<String, ComponentDefinition>, Box<dyn std::error::Error>> {
     let mut components = HashMap::new();
     
-    // Get the directory path relative to the current file
+    // Validation du répertoire de composants
     let components_dir = Path::new(path);
-    
     if !components_dir.exists() || !components_dir.is_dir() {
         return Err(format!("Component directory '{}' not found", path).into());
     }
     
-    // First pass: load all basic components without resolving dependencies
-    let mut raw_components: HashMap<String, (String, String)> = HashMap::new(); // name -> (content, file_path)
+    // === PREMIÈRE PASSE : LECTURE BRUTE ===
+    // Collecte tous les fichiers .rml sans résoudre les imports
+    // Cela évite les problèmes de dépendances circulaires
+    let mut raw_components: HashMap<String, (String, String)> = HashMap::new(); // nom → (contenu, chemin)
     
     for entry in fs::read_dir(components_dir)? {
         let entry = entry?;
         let file_path = entry.path();
         
+        // Ne traiter que les fichiers .rml
         if file_path.extension().and_then(|s| s.to_str()) == Some("rml") {
+            // Le nom du composant = nom du fichier sans extension
             let component_name = file_path
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("UnknownComponent")
                 .to_string();
             
+            // Lecture et transformation du contenu (syntaxe $ → macros get/set)
             let file_content = fs::read_to_string(&file_path)?;
             let file_content = transform_dollar_syntax(&file_content);
+            
+            // Stockage pour la deuxième passe
             raw_components.insert(component_name, (file_content, file_path.to_string_lossy().to_string()));
         }
     }
     
-
-    // todo check this
-
-    // Second pass: resolve components with their dependencies
+    // === DEUXIÈME PASSE : RÉSOLUTION AVEC CONTEXTE ===
+    // Pour chaque composant, construit son contexte local complet et résout ses dépendances
     for (component_name, (file_content, _file_path)) in &raw_components {
         if let Ok((component_node, local_imports)) = parse_component_content_with_context(file_content) {
-            let mut resolved_components = HashMap::new();
+            // === CONSTRUCTION DU CONTEXTE LOCAL ===
+            let resolved_components = build_component_context(&local_imports, &raw_components, component_name)?;
             
-            // Handle imports from the same directory with recursive resolution
-            for import in &local_imports {
-                if import.path == "." {
-                    // Import from current directory - add all other components with the alias
-                    for (other_name, (other_content, _)) in &raw_components {
-                        if other_name != component_name {
-                            // Parse the other component with its own context to resolve its dependencies too
-                            if let Ok((other_node, other_imports)) = parse_component_content_with_context(other_content) {
-                                // Build a local context for this other component
-                                let mut other_local_components = HashMap::new();
-                                
-                                // Add all components from the same directory (except itself)
-                                for other_import in &other_imports {
-                                    if other_import.path == "." {
-                                        for (third_name, (third_content, _)) in &raw_components {
-                                            if third_name != other_name {
-                                                if let Ok(third_node) = parse_component_content(third_content) {
-                                                    let third_full_name = if let Some(alias) = &other_import.alias {
-                                                        format!("{}::{}", alias, third_name)
-                                                    } else {
-                                                        third_name.clone()
-                                                    };
-                                                    other_local_components.insert(third_full_name, ComponentDefinition {
-                                                        name: third_name.clone(),
-                                                        node: third_node,
-                                                    });
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                
-                                // Resolve the other component with its dependencies
-                                let resolved_other_node = resolve_nested_components(other_node, &other_local_components);
-                                
-                                let full_name = if let Some(alias) = &import.alias {
-                                    format!("{}::{}", alias, other_name)
-                                } else {
-                                    other_name.clone()
-                                };
-                                resolved_components.insert(full_name, ComponentDefinition {
-                                    name: other_name.clone(),
-                                    node: resolved_other_node,
-                                });
-                            }
-                        }
-                    }
-                }
-                // For other import paths, we would handle them here
-                // but for now we focus on local directory imports
-            }
-            
-            // Resolve the component with its local context
+            // === RÉSOLUTION FINALE DU COMPOSANT ===
             let resolved_node = resolve_nested_components(component_node, &resolved_components);
             
+            // Stocke le composant complètement résolu
             components.insert(component_name.clone(), ComponentDefinition {
                 name: component_name.clone(),
                 node: resolved_node,
@@ -403,120 +518,30 @@ impl Parse for ComponentParser {
     }
 }
 
-fn resolve_nested_components(mut node: RmlNode, components: &HashMap<String, ComponentDefinition>) -> RmlNode {
+/// Résout récursivement toutes les références de composants dans un arbre de nœuds
+/// 
+/// Version simplifiée qui sépare la résolution de composants de la traversée d'arbre.
+/// La récursion se fait naturellement via resolve_single_component.
+/// 
+/// # Arguments
+/// * `node` - Le nœud à résoudre (peut contenir des références de composants)
+/// * `components` - Map des composants disponibles dans ce contexte
+fn resolve_nested_components(node: RmlNode, components: &HashMap<String, ComponentDefinition>) -> RmlNode {
     println!("resolve_nested_components: processing node {}", node._ident);
     println!("Available components: {:?}", components.keys().collect::<Vec<_>>());
     
-    // First, check if THIS node itself is a component reference that should be resolved
+    // Si ce nœud est une référence de composant, le résoudre
     if let Some(component_def) = components.get(&node._ident) {
-        println!("resolve_nested_components: RESOLVING ROOT NODE {} -> {}", node._ident, component_def.name);
-        // Replace this node with the component definition
-        let mut resolved_component = component_def.node.clone();
-        
-        // Get the original ID from the component definition
-        let original_id: Option<String> = resolved_component.properties.iter().find_map(|(k, v)| {
-            if k.to_string() == "id" { 
-                Some(v.to_string()) 
-            } else { 
-                None 
-            }
-        });
-        
-        // Get the new ID from the instance if provided
-        let new_id: Option<String> = node.properties.iter().find_map(|(k, v)| {
-            if k.to_string() == "id" { 
-                Some(v.to_string()) 
-            } else { 
-                None 
-            }
-        });
-        
-        println!("resolve_nested_components ROOT: original_id={:?}, new_id={:?}", original_id, new_id);
-        
-        // Override component properties with instance properties
-        for (prop_key, prop_value) in &node.properties {
-            if let Some(existing_prop) = resolved_component.properties.iter_mut().find(|(k, _)| k.to_string() == prop_key.to_string()) {
-                existing_prop.1 = prop_value.clone();
-            } else {
-                resolved_component.properties.push((prop_key.clone(), prop_value.clone()));
-            }
-        }
-        
-        // Add instance children to component children
-        resolved_component.children.extend(node.children);
-        resolved_component.functions.extend(node.functions);
-        
-        // If we have an ID change, we need to update all internal references BEFORE recursive resolution
-        if let (Some(orig_id), Some(new_id_val)) = (original_id, new_id) {
-            if orig_id != new_id_val {
-                println!("resolve_nested_components ROOT: ID change detected '{}' -> '{}'", orig_id, new_id_val);
-                resolved_component = update_node_id_references(resolved_component, &orig_id, &new_id_val);
-            }
-        }
-        
-        // Recursively resolve the resolved component
-        return resolve_nested_components(resolved_component, components);
+        return resolve_single_component(&node, component_def, components);
     }
     
-    // Then, recursively process children to resolve any nested component references
-    node.children = node.children.into_iter().map(|child| {
-        println!("resolve_nested_components: checking child {}", child._ident);
-        // Check if this child is a component reference that should be resolved
-        if let Some(component_def) = components.get(&child._ident) {
-            println!("resolve_nested_components: RESOLVING {} -> {}", child._ident, component_def.name);
-            // Replace the component reference with its actual definition
-            // Apply the child's properties to the component
-            let mut resolved_component = component_def.node.clone();
-            
-            // Get the original ID from the component definition
-            let original_id: Option<String> = resolved_component.properties.iter().find_map(|(k, v)| {
-                if k.to_string() == "id" { 
-                    Some(v.to_string()) 
-                } else { 
-                    None 
-                }
-            });
-            
-            // Get the new ID from the instance if provided
-            let new_id: Option<String> = child.properties.iter().find_map(|(k, v)| {
-                if k.to_string() == "id" { 
-                    Some(v.to_string()) 
-                } else { 
-                    None 
-                }
-            });
-            
-            // Override component properties with instance properties
-            for (prop_key, prop_value) in &child.properties {
-                if let Some(existing_prop) = resolved_component.properties.iter_mut().find(|(k, _)| k.to_string() == prop_key.to_string()) {
-                    existing_prop.1 = prop_value.clone();
-                } else {
-                    resolved_component.properties.push((prop_key.clone(), prop_value.clone()));
-                }
-            }
-            
-            // Add instance children to component children
-            resolved_component.children.extend(child.children);
-            resolved_component.functions.extend(child.functions);
-            
-            // If we have an ID change, we need to update all internal references BEFORE recursive resolution
-            if let (Some(orig_id), Some(new_id_val)) = (original_id, new_id) {
-                if orig_id != new_id_val {
-                    println!("resolve_nested_components: ID change detected '{}' -> '{}'", orig_id, new_id_val);
-                    resolved_component = update_node_id_references(resolved_component, &orig_id, &new_id_val);
-                }
-            }
-            
-            // Recursively resolve nested components
-            resolve_nested_components(resolved_component, components)
-        } else {
-            println!("resolve_nested_components: NOT FOUND {}, keeping as-is", child._ident);
-            // Recursively process children
-            resolve_nested_components(child, components)
-        }
-    }).collect();
+    // Sinon, traverser et résoudre les enfants
+    let mut resolved_node = node;
+    resolved_node.children = resolved_node.children.into_iter()
+        .map(|child| resolve_nested_components(child, components))
+        .collect();
     
-    node
+    resolved_node
 }
 
 
@@ -1279,60 +1304,45 @@ impl RmlNode {
     fn generate_custom_component(&self, component_def: &ComponentDefinition, components: &HashMap<String, ComponentDefinition>) -> GenResult {
         println!("generate_custom_component Node name: {}", component_def.name);
 
-        // Clone the component's node and apply the properties from this instance
-        let mut component_node = component_def.node.clone();
-        let original_id: String = match component_node.properties.iter().find(|(k, _)| k.to_string() == "id".to_string()) {
-            Some(id) => id.1.to_string(),
-            None => String::from(""),
-        };
-
-        println!("original_id from component: '{}'", original_id);
-        // remove id property if exist
-        component_node.properties.retain(|(k, _)| k.to_string() != "id".to_string());
-
-        // Override the component's properties with the ones passed to this instance
-        for (prop_key, prop_value) in &self.properties {
-            // Find if this property already exists in the component
-            if let Some(existing_prop) = component_node.properties.iter_mut().find(|(k, _)| k.to_string() == prop_key.to_string()) {
-                existing_prop.1 = prop_value.clone();
-            } else {
-                // Add new property
-                component_node.properties.push((prop_key.clone(), prop_value.clone()));
-            }
-        }
+        // === UTILISE LA LOGIQUE COMMUNE DE RÉSOLUTION ===
+        // Note: resolve_single_component fait déjà tout le travail de résolution,
+        // mais ici on doit générer le code final, donc on garde une logique spécialisée
         
-        // Add children from this instance to the component
+        let mut component_node = component_def.node.clone();
+        let original_id = extract_node_id(&component_node).unwrap_or_default();
+        
+        println!("original_id from component: '{}'", original_id);
+        
+        // Retire l'ID pour éviter les conflits lors de l'application des propriétés
+        component_node.properties.retain(|(k, _)| k.to_string() != "id");
+        
+        // === APPLIQUE LES PROPRIÉTÉS D'INSTANCE ===
+        apply_instance_properties(&mut component_node, &self.properties);
+        
+        // === AJOUTE LES ENFANTS D'INSTANCE ===
         component_node.children.extend(self.children.clone());
         
-        // Generate the component with the applied properties
-        // We pass the global components map, but the component_node should already be resolved
+        // === GÉNÉRATION DU CODE ===
         let component_gen_res = component_node.generate_with_components(components);
         let new_id = component_gen_res.0.clone();
-
+        
         println!("final new_id: '{}'", new_id);
         
         let mut component_code = component_gen_res.1;
         let mut functions_code = component_gen_res.2;
         let mut initializer_code = component_gen_res.3;
         
-        // Replace the original id with the new id if we have both
+        // === REMPLACEMENT DES RÉFÉRENCES D'ID DANS LE CODE GÉNÉRÉ ===
         if !original_id.is_empty() && original_id != new_id {
             println!("Replacing '{}' with '{}' in generated code", original_id, new_id);
             
-            // Replace in component code using a more sophisticated approach
-            let component_str = component_code.to_string();
-            let new_component_str = replace_id_references(&component_str, &original_id, &new_id);
-            component_code = new_component_str.parse().unwrap_or(component_code);
-            
-            // Replace in functions code
-            let functions_str = functions_code.to_string();
-            let new_functions_str = replace_id_references(&functions_str, &original_id, &new_id);
-            functions_code = new_functions_str.parse().unwrap_or(functions_code);
-            
-            // Replace in initializer code
-            let initializer_str = initializer_code.to_string();
-            let new_initializer_str = replace_id_references(&initializer_str, &original_id, &new_id);
-            initializer_code = new_initializer_str.parse().unwrap_or(initializer_code);
+            // Applique le remplacement à tous les types de code générés
+            component_code = replace_id_references(&component_code.to_string(), &original_id, &new_id)
+                .parse().unwrap_or(component_code);
+            functions_code = replace_id_references(&functions_code.to_string(), &original_id, &new_id)
+                .parse().unwrap_or(functions_code);
+            initializer_code = replace_id_references(&initializer_code.to_string(), &original_id, &new_id)
+                .parse().unwrap_or(initializer_code);
         }
 
         (new_id, component_code, functions_code, initializer_code)
