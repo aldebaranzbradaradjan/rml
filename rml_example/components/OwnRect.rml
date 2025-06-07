@@ -1,0 +1,6 @@
+
+Rectangle {
+    id: test_rect
+
+    color: { BLUE }
+}

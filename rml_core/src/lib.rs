@@ -6,7 +6,7 @@ pub mod events;
 
 use arena::ArenaNodeId;
 pub use arena::{ArenaNode, ArenaTree, NodeId, PropertyMap, PropertyName, ItemTypeEnum};
-pub use properties::{AbstractValue, Property};
+pub use properties::{AbstractValue, AbstractValueType, Property};
 pub use events::{SystemEvent, EventType, EventManager};
 
 use std::{collections::{HashMap}, sync::{Arc}};
@@ -174,6 +174,23 @@ macro_rules! get_value {
         }
     }};
 }
+
+// soooo bad it don't work like that
+// #[macro_export]
+// macro_rules! convert_abstract_value_to_value {
+//     ($engine:expr, $node:ident, $prop:ident) => {{
+//         let value = get_value!($engine, $node, $prop);
+//         match value.value_type() {
+//             AbstractValueType::Null => false,
+//             AbstractValueType::Bool => value.to_bool().unwrap(),
+//             AbstractValueType::Number => value.to_number().unwrap(),
+//             AbstractValueType::String => value.to_string().unwrap(),
+//             AbstractValueType::Color => value.to_color().unwrap(),
+//             AbstractValueType::Array => value.to_array().unwrap(),
+//         }
+//     }};
+// }
+
 
 pub fn lighter_color(color: Color, amount: f32) -> Color {
     let mut color = color;
@@ -740,6 +757,8 @@ pub mod prelude {
         RmlEngine,
         Property,
         AbstractValue,
+        AbstractValueType,
+        //convert_abstract_value_to_value,
         get_value,
         get_bool,
         set_bool,

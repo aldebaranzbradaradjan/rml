@@ -73,6 +73,51 @@ fn format_code_for_binding_extraction(code: &str) -> String {
     code.to_string()
 }
 
+fn update_node_id_references(mut node: RmlNode, original_id: &str, new_id: &str) -> RmlNode {
+    // Update property values that might contain references to the old ID
+    for (_, prop_value) in &mut node.properties {
+        match prop_value {
+            Value::Block(ref mut block) => {
+                // Update block content by converting to string, replacing, and parsing back
+                let block_str = quote! { #block }.to_string();
+                let updated_str = replace_id_references(&block_str, original_id, new_id);
+                if let Ok(updated_tokens) = updated_str.parse::<proc_macro2::TokenStream>() {
+                    if let Ok(updated_block) = syn::parse2::<syn::Block>(updated_tokens) {
+                        *block = updated_block;
+                    }
+                }
+            }
+            _ => {} // For simple values, no ID references expected
+        }
+    }
+    
+    // Recursively update children
+    node.children = node.children.into_iter().map(|child| {
+        update_node_id_references(child, original_id, new_id)
+    }).collect();
+    
+    node
+}
+
+fn replace_id_references(code: &str, original_id: &str, new_id: &str) -> String {
+    use regex::Regex;
+    
+    let mut result = code.to_string();
+    
+    // Replace direct string references: "original_id" -> "new_id"
+    let quoted_pattern = format!("\"{}\"", regex::escape(original_id));
+    let quoted_replacement = format!("\"{}\"", new_id);
+    let quoted_regex = Regex::new(&quoted_pattern).unwrap();
+    result = quoted_regex.replace_all(&result, quoted_replacement.as_str()).to_string();
+    
+    // Replace variable/identifier references: original_id -> new_id (when it's a standalone identifier)
+    let id_pattern = format!(r"\b{}\b", regex::escape(original_id));
+    let id_regex = Regex::new(&id_pattern).unwrap();
+    result = id_regex.replace_all(&result, new_id).to_string();
+    
+    result
+}
+
 fn format_code(code: &str) -> String {
     let mut rustfmt = Command::new("rustfmt")
         .stdin(Stdio::piped())
@@ -200,8 +245,8 @@ fn inject_engine_text_based(
     output
 }
 
-fn load_components_from_path(path: &str) -> Result<Vec<ComponentDefinition>, Box<dyn std::error::Error>> {
-    let mut components = Vec::new();
+fn load_components_from_path_with_context(path: &str) -> Result<HashMap<String, ComponentDefinition>, Box<dyn std::error::Error>> {
+    let mut components = HashMap::new();
     
     // Get the directory path relative to the current file
     let components_dir = Path::new(path);
@@ -210,7 +255,9 @@ fn load_components_from_path(path: &str) -> Result<Vec<ComponentDefinition>, Box
         return Err(format!("Component directory '{}' not found", path).into());
     }
     
-    // Read all .rml files in the directory
+    // First pass: load all basic components without resolving dependencies
+    let mut raw_components: HashMap<String, (String, String)> = HashMap::new(); // name -> (content, file_path)
+    
     for entry in fs::read_dir(components_dir)? {
         let entry = entry?;
         let file_path = entry.path();
@@ -222,17 +269,79 @@ fn load_components_from_path(path: &str) -> Result<Vec<ComponentDefinition>, Box
                 .unwrap_or("UnknownComponent")
                 .to_string();
             
-            // Read and parse the component file
             let file_content = fs::read_to_string(&file_path)?;
             let file_content = transform_dollar_syntax(&file_content);
+            raw_components.insert(component_name, (file_content, file_path.to_string_lossy().to_string()));
+        }
+    }
+    
+
+    // todo check this
+
+    // Second pass: resolve components with their dependencies
+    for (component_name, (file_content, _file_path)) in &raw_components {
+        if let Ok((component_node, local_imports)) = parse_component_content_with_context(file_content) {
+            let mut resolved_components = HashMap::new();
             
-            // Parse the RML content as a component
-            if let Ok(component_node) = parse_component_content(&file_content) {
-                components.push(ComponentDefinition {
-                    name: component_name,
-                    node: component_node,
-                });
+            // Handle imports from the same directory with recursive resolution
+            for import in &local_imports {
+                if import.path == "." {
+                    // Import from current directory - add all other components with the alias
+                    for (other_name, (other_content, _)) in &raw_components {
+                        if other_name != component_name {
+                            // Parse the other component with its own context to resolve its dependencies too
+                            if let Ok((other_node, other_imports)) = parse_component_content_with_context(other_content) {
+                                // Build a local context for this other component
+                                let mut other_local_components = HashMap::new();
+                                
+                                // Add all components from the same directory (except itself)
+                                for other_import in &other_imports {
+                                    if other_import.path == "." {
+                                        for (third_name, (third_content, _)) in &raw_components {
+                                            if third_name != other_name {
+                                                if let Ok(third_node) = parse_component_content(third_content) {
+                                                    let third_full_name = if let Some(alias) = &other_import.alias {
+                                                        format!("{}::{}", alias, third_name)
+                                                    } else {
+                                                        third_name.clone()
+                                                    };
+                                                    other_local_components.insert(third_full_name, ComponentDefinition {
+                                                        name: third_name.clone(),
+                                                        node: third_node,
+                                                    });
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                // Resolve the other component with its dependencies
+                                let resolved_other_node = resolve_nested_components(other_node, &other_local_components);
+                                
+                                let full_name = if let Some(alias) = &import.alias {
+                                    format!("{}::{}", alias, other_name)
+                                } else {
+                                    other_name.clone()
+                                };
+                                resolved_components.insert(full_name, ComponentDefinition {
+                                    name: other_name.clone(),
+                                    node: resolved_other_node,
+                                });
+                            }
+                        }
+                    }
+                }
+                // For other import paths, we would handle them here
+                // but for now we focus on local directory imports
             }
+            
+            // Resolve the component with its local context
+            let resolved_node = resolve_nested_components(component_node, &resolved_components);
+            
+            components.insert(component_name.clone(), ComponentDefinition {
+                name: component_name.clone(),
+                node: resolved_node,
+            });
         }
     }
     
@@ -244,6 +353,170 @@ fn parse_component_content(content: &str) -> Result<RmlNode, Box<dyn std::error:
     let tokens: proc_macro2::TokenStream = content.parse()?;
     let parsed = syn::parse2::<RmlNode>(tokens)?;
     Ok(parsed)
+}
+
+fn parse_component_content_with_context(content: &str) -> Result<(RmlNode, Vec<ImportStatement>), Box<dyn std::error::Error>> {
+    // Parse the content as a TokenStream, handling imports for this specific component
+    let tokens: proc_macro2::TokenStream = content.parse()?;
+    
+    // We need to manually parse the input to get both imports and the root node
+    if let Ok(parser) = syn::parse2::<ComponentParser>(tokens.clone()) {
+        Ok((parser.root_node, parser.imports))
+    } else {
+        // Fallback: no imports, just parse as RmlNode
+        let parsed = syn::parse2::<RmlNode>(tokens)?;
+        Ok((parsed, Vec::new()))
+    }
+}
+
+// Helper parser for components that can have imports
+struct ComponentParser {
+    imports: Vec<ImportStatement>,
+    root_node: RmlNode,
+}
+
+impl Parse for ComponentParser {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut imports = Vec::new();
+        
+        // Parse imports first
+        while input.peek(Ident) && input.peek2(LitStr) {
+            // Check if this is an import statement by looking ahead
+            let fork = input.fork();
+            if let Ok(ident) = fork.parse::<Ident>() {
+                if ident == "import" {
+                    let import: ImportStatement = input.parse()?;
+                    imports.push(import);
+                    continue;
+                }
+            }
+            break;
+        }
+        
+        // Parse the root node
+        let root_node: RmlNode = input.parse()?;
+        
+        Ok(ComponentParser {
+            imports,
+            root_node,
+        })
+    }
+}
+
+fn resolve_nested_components(mut node: RmlNode, components: &HashMap<String, ComponentDefinition>) -> RmlNode {
+    println!("resolve_nested_components: processing node {}", node._ident);
+    println!("Available components: {:?}", components.keys().collect::<Vec<_>>());
+    
+    // First, check if THIS node itself is a component reference that should be resolved
+    if let Some(component_def) = components.get(&node._ident) {
+        println!("resolve_nested_components: RESOLVING ROOT NODE {} -> {}", node._ident, component_def.name);
+        // Replace this node with the component definition
+        let mut resolved_component = component_def.node.clone();
+        
+        // Get the original ID from the component definition
+        let original_id: Option<String> = resolved_component.properties.iter().find_map(|(k, v)| {
+            if k.to_string() == "id" { 
+                Some(v.to_string()) 
+            } else { 
+                None 
+            }
+        });
+        
+        // Get the new ID from the instance if provided
+        let new_id: Option<String> = node.properties.iter().find_map(|(k, v)| {
+            if k.to_string() == "id" { 
+                Some(v.to_string()) 
+            } else { 
+                None 
+            }
+        });
+        
+        println!("resolve_nested_components ROOT: original_id={:?}, new_id={:?}", original_id, new_id);
+        
+        // Override component properties with instance properties
+        for (prop_key, prop_value) in &node.properties {
+            if let Some(existing_prop) = resolved_component.properties.iter_mut().find(|(k, _)| k.to_string() == prop_key.to_string()) {
+                existing_prop.1 = prop_value.clone();
+            } else {
+                resolved_component.properties.push((prop_key.clone(), prop_value.clone()));
+            }
+        }
+        
+        // Add instance children to component children
+        resolved_component.children.extend(node.children);
+        resolved_component.functions.extend(node.functions);
+        
+        // If we have an ID change, we need to update all internal references BEFORE recursive resolution
+        if let (Some(orig_id), Some(new_id_val)) = (original_id, new_id) {
+            if orig_id != new_id_val {
+                println!("resolve_nested_components ROOT: ID change detected '{}' -> '{}'", orig_id, new_id_val);
+                resolved_component = update_node_id_references(resolved_component, &orig_id, &new_id_val);
+            }
+        }
+        
+        // Recursively resolve the resolved component
+        return resolve_nested_components(resolved_component, components);
+    }
+    
+    // Then, recursively process children to resolve any nested component references
+    node.children = node.children.into_iter().map(|child| {
+        println!("resolve_nested_components: checking child {}", child._ident);
+        // Check if this child is a component reference that should be resolved
+        if let Some(component_def) = components.get(&child._ident) {
+            println!("resolve_nested_components: RESOLVING {} -> {}", child._ident, component_def.name);
+            // Replace the component reference with its actual definition
+            // Apply the child's properties to the component
+            let mut resolved_component = component_def.node.clone();
+            
+            // Get the original ID from the component definition
+            let original_id: Option<String> = resolved_component.properties.iter().find_map(|(k, v)| {
+                if k.to_string() == "id" { 
+                    Some(v.to_string()) 
+                } else { 
+                    None 
+                }
+            });
+            
+            // Get the new ID from the instance if provided
+            let new_id: Option<String> = child.properties.iter().find_map(|(k, v)| {
+                if k.to_string() == "id" { 
+                    Some(v.to_string()) 
+                } else { 
+                    None 
+                }
+            });
+            
+            // Override component properties with instance properties
+            for (prop_key, prop_value) in &child.properties {
+                if let Some(existing_prop) = resolved_component.properties.iter_mut().find(|(k, _)| k.to_string() == prop_key.to_string()) {
+                    existing_prop.1 = prop_value.clone();
+                } else {
+                    resolved_component.properties.push((prop_key.clone(), prop_value.clone()));
+                }
+            }
+            
+            // Add instance children to component children
+            resolved_component.children.extend(child.children);
+            resolved_component.functions.extend(child.functions);
+            
+            // If we have an ID change, we need to update all internal references BEFORE recursive resolution
+            if let (Some(orig_id), Some(new_id_val)) = (original_id, new_id) {
+                if orig_id != new_id_val {
+                    println!("resolve_nested_components: ID change detected '{}' -> '{}'", orig_id, new_id_val);
+                    resolved_component = update_node_id_references(resolved_component, &orig_id, &new_id_val);
+                }
+            }
+            
+            // Recursively resolve nested components
+            resolve_nested_components(resolved_component, components)
+        } else {
+            println!("resolve_nested_components: NOT FOUND {}, keeping as-is", child._ident);
+            // Recursively process children
+            resolve_nested_components(child, components)
+        }
+    }).collect();
+    
+    node
 }
 
 
@@ -266,12 +539,6 @@ pub fn rml(input: TokenStream) -> TokenStream {
         let parsed = parse_macro_input!(transformed_input as RmlNode);
         (parsed, HashMap::new())
     };
-
-
-    // let (parsed_node, components) = {
-    //     let parsed = parse_macro_input!(transformed_input as RmlNode);
-    //     (parsed, HashMap::new())
-    // };
 
     //println!("Components: {:#?}", components.keys());
     
@@ -602,17 +869,17 @@ impl Parse for RmlParser {
                 if ident == "import" {
                     let import: ImportStatement = input.parse()?;
                     
-                    // Load components from the import path
-                    if let Ok(loaded_components) = load_components_from_path(&import.path) {
-                        for component in loaded_components {
-                            let component_name = if let Some(alias) = &import.alias {
-                                format!("{}::{}", alias, component.name)
+                    // Load components from the import path with individual context
+                    if let Ok(loaded_components) = load_components_from_path_with_context(&import.path) {
+                        for (component_name, component) in loaded_components {
+                            let final_component_name = if let Some(alias) = &import.alias {
+                                format!("{}::{}", alias, component_name)
                             } else {
-                                component.name.clone()
+                                component_name.clone()
                             };
                             
-                            println!("Component name: {}", component_name);
-                            components.insert(component_name, component);
+                            println!("Component name: {}", final_component_name);
+                            components.insert(final_component_name, component);
                         }
                     }
                     continue;
@@ -717,9 +984,6 @@ impl Parse for RmlNode {
 type GenResult = (String, proc_macro2::TokenStream, proc_macro2::TokenStream, proc_macro2::TokenStream);
 
 impl RmlNode {
-    // fn generate(&self) -> GenResult {
-    //     self.generate_with_components(&HashMap::new())
-    // }
     
     fn generate_with_components(&self, components: &HashMap<String, ComponentDefinition>) -> GenResult {
         let node_type_str = self._ident.to_string();
@@ -934,7 +1198,7 @@ impl RmlNode {
                         
                         if is_mouse_event && node_type != ItemTypeEnum::MouseArea {
                             // Mouse events are only allowed on MouseArea nodes
-                            panic!("Mouse events can only be used in MouseArea nodes");
+                            panic!("Mouse events can only be used in MouseArea nodes, node is {:?}", node_type);
                         }
                         
                         let event_type = match event_name {
@@ -1013,6 +1277,8 @@ impl RmlNode {
     }
     
     fn generate_custom_component(&self, component_def: &ComponentDefinition, components: &HashMap<String, ComponentDefinition>) -> GenResult {
+        println!("generate_custom_component Node name: {}", component_def.name);
+
         // Clone the component's node and apply the properties from this instance
         let mut component_node = component_def.node.clone();
         let original_id: String = match component_node.properties.iter().find(|(k, _)| k.to_string() == "id".to_string()) {
@@ -1020,6 +1286,7 @@ impl RmlNode {
             None => String::from(""),
         };
 
+        println!("original_id from component: '{}'", original_id);
         // remove id property if exist
         component_node.properties.retain(|(k, _)| k.to_string() != "id".to_string());
 
@@ -1038,34 +1305,33 @@ impl RmlNode {
         component_node.children.extend(self.children.clone());
         
         // Generate the component with the applied properties
+        // We pass the global components map, but the component_node should already be resolved
         let component_gen_res = component_node.generate_with_components(components);
         let new_id = component_gen_res.0.clone();
 
-        // replace the original id present in the component (in callbacks) with the new id
-        //println!("original_id: {}, new_id: {}", original_id, new_id);
+        println!("final new_id: '{}'", new_id);
         
         let mut component_code = component_gen_res.1;
         let mut functions_code = component_gen_res.2;
         let mut initializer_code = component_gen_res.3;
         
-        // Only do replacement if we have an original_id to replace
-        if !original_id.is_empty() {
-            // Replace in component code
+        // Replace the original id with the new id if we have both
+        if !original_id.is_empty() && original_id != new_id {
+            println!("Replacing '{}' with '{}' in generated code", original_id, new_id);
+            
+            // Replace in component code using a more sophisticated approach
             let component_str = component_code.to_string();
-            let new_component_str = component_str.replace(&original_id, &new_id);
-            //let new_component_str = transform_dollar_syntax(&new_component_str);
+            let new_component_str = replace_id_references(&component_str, &original_id, &new_id);
             component_code = new_component_str.parse().unwrap_or(component_code);
             
             // Replace in functions code
             let functions_str = functions_code.to_string();
-            let new_functions_str = functions_str.replace(&original_id, &new_id);
-            //let new_functions_str = transform_dollar_syntax(&new_functions_str);
+            let new_functions_str = replace_id_references(&functions_str, &original_id, &new_id);
             functions_code = new_functions_str.parse().unwrap_or(functions_code);
             
             // Replace in initializer code
             let initializer_str = initializer_code.to_string();
-            let new_initializer_str = initializer_str.replace(&original_id, &new_id);
-            //let new_initializer_str = transform_dollar_syntax(&new_initializer_str);
+            let new_initializer_str = replace_id_references(&initializer_str, &original_id, &new_id);
             initializer_code = new_initializer_str.parse().unwrap_or(initializer_code);
         }
 

@@ -40,6 +40,16 @@ pub enum AbstractValue {
     Null,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum AbstractValueType {
+    Bool,
+    String,
+    Number,
+    Color,
+    Array,
+    Null,
+}
+
 impl From<u32> for AbstractValue {
     fn from(val: u32) -> Self {
         AbstractValue::Number(val as f32)
@@ -95,6 +105,17 @@ impl std::fmt::Display for AbstractValue {
 }
 
 impl AbstractValue {
+    pub fn value_type(&self) -> AbstractValueType {
+        match self {
+            AbstractValue::Bool { .. } => AbstractValueType::Bool,
+            AbstractValue::String { .. } => AbstractValueType::String,
+            AbstractValue::Number { .. } => AbstractValueType::Number,
+            AbstractValue::Color { .. } => AbstractValueType::Color,
+            AbstractValue::Array { .. } => AbstractValueType::Array,
+            AbstractValue::Null { .. } => AbstractValueType::Null,
+        }
+    }
+
     pub fn to_string(&self) -> String {
         match self {
             AbstractValue::Bool(b) => b.to_string(),
@@ -130,3 +151,4 @@ impl AbstractValue {
         }
     }
 }
+

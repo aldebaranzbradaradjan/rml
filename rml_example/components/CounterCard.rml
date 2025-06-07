@@ -1,0 +1,44 @@
+
+import "."
+
+Card {
+    id: info_card
+    content: "a button card"
+    title: "Red Button !"
+    x: 0
+    y: 0
+    
+    is_dragging: false
+    dist_mouse_x: 0.0
+    dist_mouse_y: 0.0
+
+    signal click
+
+    MouseArea {
+        anchors: fill 
+        on_mouse_down: { 
+            let (mouse_x, mouse_y) = engine.get_mouse_position();
+            $.info_card.dist_mouse_x = mouse_x - $.info_card.x:f32;
+            $.info_card.dist_mouse_y = mouse_y - $.info_card.y:f32;
+            $.info_card.is_dragging = true;
+        }
+        on_mouse_up: { $.info_card.is_dragging = false; }
+        on_mouse_move: {
+            if $.info_card.is_dragging:bool {
+                let (mouse_x, mouse_y) = engine.get_mouse_position();
+                let mouse_x = mouse_x - $.info_card.dist_mouse_x:f32;
+                let mouse_y = mouse_y - $.info_card.dist_mouse_y:f32;
+                let new_x = mouse_x;
+                let new_y = mouse_y;
+                $.info_card.x = new_x;
+                $.info_card.y = new_y;
+            }
+        }
+    }
+
+    ButtonRed {
+        anchors: bottom | horizontal_center
+        bottom_margin: 10
+        on_click: { emit!(engine, info_card, click); }
+    }
+}

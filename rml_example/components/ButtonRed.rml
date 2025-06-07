@@ -1,6 +1,5 @@
-
-// no need to import "components"; they must be imported at the main root level (the first rml file)
+import "."
 
 Button {
-    base_color: "rgba(0.8, 0.2, 0.2, 1.0)"
+    base_color: { RED }
 }

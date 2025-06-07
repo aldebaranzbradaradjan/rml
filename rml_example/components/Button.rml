@@ -1,5 +1,7 @@
 
-Rectangle {
+import "."
+
+OwnRect {
     id: root_btn_template
     width: 100
     height: 40
@@ -26,6 +28,10 @@ Rectangle {
     
     MouseArea {
         anchors: fill
+        consume_mouse_enter: true
+        consume_mouse_click: true
+        consume_mouse_down: true
+        consume_mouse_up: true
         on_click: { emit!(engine, root_btn_template, click); }
         on_mouse_down: { $.root_btn_template.pushed = true; }
         on_mouse_up: { $.root_btn_template.pushed = false; }

@@ -12,7 +12,7 @@ Rectangle {
         id: card_title
         anchors: top | horizontal_center
         margins: 10
-        text: { get_string!(engine, root_info_card, title) }
+        text: { $.root_info_card.title }
         color: "rgba(0.0, 0.0, 0.0, 1.0)"
         font_size: 18
     }
@@ -20,9 +20,9 @@ Rectangle {
     Text {
         id: card_content
         anchors: center
-        text: { get_string!(engine, root_info_card, content) }
+        text: { $.root_info_card.content }
         color: "rgba(0.3, 0.3, 0.3, 1.0)"
         font_size: 14
-        width: { get_number!(engine, root_info_card, width) - 20. }
+        width: { $.root_info_card.width:f32 - 20. }
     }
 }
