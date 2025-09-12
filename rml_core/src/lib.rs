@@ -10,7 +10,7 @@ pub use properties::{AbstractValue, Property};
 pub use events::{SystemEvent, EventType, EventManager};
 
 use std::{collections::{HashMap}, sync::{Arc}};
-use macroquad::color::Color;
+use macroquad::{color::Color, prelude::info};
 
 pub type CallbackId = usize;
 pub type PropertyId = usize;
@@ -247,8 +247,24 @@ impl RmlEngine {
         self.arena.add_node(node_type, id, properties)
     }
 
+/*************  ✨ Windsurf Command ⭐  *************/
+/*******  9d5b49fe-cba0-4937-875a-31cbd6f6947c  *******/
     pub fn add_child(&mut self, parent_id: NodeId, child_id: NodeId) {
         self.arena.add_child(parent_id, child_id);
+    }
+
+    pub fn get_root_node_id(&self) -> Option<NodeId> {
+        self.arena.get_root_node_id()
+    }
+    pub fn get_root_node(&self) -> Option<&ArenaNode> {
+        match self.arena.get_root_node_id() {
+            Some(node_id) => self.arena.get_node(node_id),
+            None => None
+        }
+    }
+
+    pub fn get_root_node_str_id(&self) -> Option<String> {
+        self.get_root_node().map(|node| node.id.clone())
     }
 
     pub fn get_node_by_id(&self, id: &str) -> Option<&ArenaNode> {

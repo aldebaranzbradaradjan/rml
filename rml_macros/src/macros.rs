@@ -121,7 +121,6 @@ pub fn property_parse(content: &ParseBuffer) -> Result<Value, syn::Error> {
 impl RmlParser {
     pub fn parse_with_path(input: ParseStream, parent_path: String) -> syn::Result<Self> {
         let mut components = HashMap::new();
-        info!("RmlParser::parse");
         // Parse imports first
         while input.peek(Ident) && input.peek2(LitStr) {
             // Check if this is an import statement by looking ahead
@@ -137,11 +136,8 @@ impl RmlParser {
                         import.path.to_string()
                     } else {
                         //get the dir part of the parent path
-                        info!("Parent path: {}", &parent_path);
                         Path::new(&parent_path).parent().unwrap_or(Path::new("")).join(&import.path).to_string_lossy().to_string()
                     };
-
-                    info!("Resolved path: {}", &resolved_path);
 
                     if let Ok(loaded_components) = load_components_from_path(&resolved_path) {
                         for component in loaded_components {
@@ -150,8 +146,6 @@ impl RmlParser {
                             } else {
                                 component.name.clone()
                             };
-                            
-                            println!("Component name: {} {} {}", component_name, component.name, component.path);
                             components.insert(component_name, component);
                         }
                     }
@@ -190,8 +184,6 @@ impl Parse for ImportStatement {
         } else {
             None
         };
-
-        println!("Alias: {:#?}, path: {:#?}", alias, path);
         
         Ok(ImportStatement { path, alias })
     }
@@ -208,8 +200,6 @@ impl Parse for RmlNode {
             let second_ident: Ident = input.parse()?;
             _ident = format!("{}::{}", _ident, second_ident.to_string());
         }
-
-        println!("Node name: {}", _ident);
 
         let content;
         syn::braced!(content in input);
@@ -290,9 +280,7 @@ impl RmlNode {
         if let Some(component_def) = components.get(&node_type_str) {
             // For custom components, we expand them by generating the component's node
             // and applying the properties passed to the component
-            println!("Generating custom component: {}", node_type_str);
             let cmp = self.generate_custom_component(component_def);
-            //println!("Generated custom component: {} {}", cmp.0, cmp.1);
             return cmp;
         }
 
@@ -553,7 +541,16 @@ impl RmlNode {
                 HashMap::new(),
             ).unwrap();
 
-            // create computed geometry properties for all nodes
+            // create geometry properties for all nodes
+            let x_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
+            engine.add_property_to_node(#temp_node, "x".to_string(), x_prop);
+            let y_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
+            engine.add_property_to_node(#temp_node, "y".to_string(), y_prop);
+            let width_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
+            engine.add_property_to_node(#temp_node, "width".to_string(), width_prop);
+            let height_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
+            engine.add_property_to_node(#temp_node, "height".to_string(), height_prop);
+
             let computed_x_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
             engine.add_property_to_node(#temp_node, "computed_x".to_string(), computed_x_prop);
             let computed_y_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
@@ -576,21 +573,15 @@ impl RmlNode {
     
     fn generate_custom_component(&self, component_def: &ComponentDefinition) -> GenResult {
         // Read and parse the component file
-        info!("Reading component file: {}", component_def.path);
-
         let file_content = fs::read_to_string(&component_def.path).unwrap();
         let file_content = transform_dollar_syntax(&file_content);
-
         let tokens: proc_macro::TokenStream = file_content.parse().unwrap();
 
-        
-        //let res = syn::parse::<RmlParser>(tokens.clone()).unwrap();
         let res= syn::parse::Parser::parse(|input: ParseStream| {
           RmlParser::parse_with_path(input, component_def.path.clone())
         }, tokens.clone()).unwrap();
 
         let (mut component_node, components) = (res.root_node, res.components);
-
 
         let original_id: String = match component_node.properties.iter().find(|(k, _)| k.to_string() == "id".to_string()) {
             Some(id) => id.1.to_string(),
@@ -619,8 +610,6 @@ impl RmlNode {
         let new_id = component_gen_res.0.clone();
 
         // replace the original id present in the component (in callbacks) with the new id
-        //println!("original_id: {}, new_id: {}", original_id, new_id);
-        
         let mut component_code = component_gen_res.1;
         let mut functions_code = component_gen_res.2;
         let mut initializer_code = component_gen_res.3;

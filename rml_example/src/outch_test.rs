@@ -13,8 +13,8 @@ use std::collections::HashMap;
 fn window_conf() -> Conf {
     Conf {
         window_title: "RML Component Test".to_owned(),
-        window_width: 200,
-        window_height: 200,
+        window_width: 300,
+        window_height: 300,
         window_resizable: true,
         fullscreen: false,
         platform: miniquad::conf::Platform {
@@ -33,14 +33,19 @@ async fn main() {
 
         Node {
             id: root
-            width: 200
-            height: 200
+            anchors: fill
             text: "Please don't hit my button!"
 
             signal click
 
             on_click: {
                 $.root.text = "outch!".to_string();
+            }
+
+            Rectangle {
+                anchors: fill
+                margins: 10
+                color: { GRAY }
             }
             
             Text {
@@ -53,8 +58,8 @@ async fn main() {
             UI::Button {
                 id: test_btn
                 anchors: center | bottom
+                margins: 20
                 text: "Click me!"
-                color: { BLACK }
                 on_click: {
                     emit!(engine, root, click);
                 }
@@ -68,7 +73,8 @@ async fn main() {
     loop {
         engine.process_events();
         clear_background(DARKGRAY);
-        rml_core::draw::draw_childs(&mut engine, "root", (0., 0.));
-        next_frame().await
+        rml_core::draw::draw_root(&mut engine);
+        next_frame().await;
+        info!("FPS: {}", get_fps());
     }
 }

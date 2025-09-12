@@ -59,7 +59,7 @@ impl Margins {
                     self.top = 0.0;
                     self.bottom = 0.0;
                 }
-                Anchor::Center => {
+                Anchor::Center if anchors.len() == 1 => {
                     self.left = 0.0;
                     self.right = 0.0;
                     self.top = 0.0;
@@ -69,7 +69,7 @@ impl Margins {
             }
         }
 
-        // if fill ies specified, don't alter margins
+        // if fill is specified, don't alter margins
         if anchors.contains(&Anchor::Fill) { return; }
 
         // special logic: if we don't have the corresponding anchor, no margin
@@ -186,6 +186,20 @@ fn get_parent_size(engine: &RmlEngine, node_id: &str) -> (f32, f32) {
     }
 }
 
+fn compute_root_geometry(window_width: f32, window_height: f32, engine: &RmlEngine, node_id: &str) -> (f32, f32, f32, f32) {
+    let mut geometry = Geometry::new(engine, node_id);
+
+    let anchor_string = engine.get_string_property_of_node(node_id, "anchors", String::new());
+    let anchors = parse_anchors(&anchor_string);
+    geometry.apply_anchors(&anchors, (window_width, window_height));
+
+    let mut margins = Margins::new(engine, node_id);
+    margins.apply_anchor_constraints(&anchors);
+    geometry.apply_margins(&margins, &anchors, (0.0, 0.0));
+
+    (geometry.x, geometry.y, geometry.width, geometry.height)
+}
+
 fn compute_geometry(engine: &RmlEngine, parent_pos: (f32, f32), node_id: &str) -> (f32, f32, f32, f32) {
     let mut geometry = Geometry::new(engine, node_id);
     let parent_size = get_parent_size(engine, node_id);
@@ -256,6 +270,26 @@ fn draw_text_with_wrap(text: &str, x: f32, y: f32, max_width: f32, text_params: 
     }
 }
 
+pub fn draw_root(engine: &mut RmlEngine) {
+    // draw the root node,
+    // then draw chils
+    if let Some(root_node) = engine.get_root_node_str_id() {
+        // get  macroquad window size
+        let (window_width, window_height) = miniquad::window::screen_size();
+        let (x, y, width, height) = compute_root_geometry(window_width, window_height, engine, &root_node);
+
+        engine.set_property_of_node(&root_node, "x", crate::AbstractValue::Number(x));
+        engine.set_property_of_node(&root_node, "y", crate::AbstractValue::Number(y));
+        engine.set_property_of_node(&root_node, "width", crate::AbstractValue::Number(width));
+        engine.set_property_of_node(&root_node, "height", crate::AbstractValue::Number(height));
+
+        let color = engine.get_color_property_of_node(&root_node, "color", RED);
+        draw_rectangle(x, y, width, height, color);
+
+        draw_childs(engine, "root", (0.0, 0.0));
+    }
+}
+
 pub fn draw_childs(engine: &mut RmlEngine, node_id: &str, parent_pos: (f32, f32)) {
     // Get the node by its ID
     let children_ids = engine.get_children_str_ids_by_id(node_id).unwrap_or_default();
@@ -264,9 +298,8 @@ pub fn draw_childs(engine: &mut RmlEngine, node_id: &str, parent_pos: (f32, f32)
     // compute geometry for the node
     for node_id in &children_ids {
         let (x, y, width, height) = compute_geometry(engine, parent_pos, node_id);
-        
         // Store computed geometry in node properties for event system reuse
-        // x, y are already absolute coordinates (computed_geometry includes parent_pos)
+        // x, y are absolute coordinates (computed_geometry includes parent_pos)
         engine.set_property_of_node(node_id, "computed_x", crate::AbstractValue::Number(x));
         engine.set_property_of_node(node_id, "computed_y", crate::AbstractValue::Number(y));
         engine.set_property_of_node(node_id, "computed_width", crate::AbstractValue::Number(width));

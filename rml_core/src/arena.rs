@@ -145,6 +145,11 @@ impl ArenaTree {
         }
     }
 
+    pub fn get_root_node_id(&self) -> Option<NodeId> {
+        if self.nodes.is_empty() { return None }
+        Some(0)
+    }
+
     /// Get a node by id
     pub fn get_node_by_id(&self, id: &str) -> Option<&ArenaNode> {
         self.id_to_node_id.get(id).and_then(|&node_id| self.nodes.get(node_id))

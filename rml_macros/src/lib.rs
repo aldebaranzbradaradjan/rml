@@ -1,5 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{quote};
+use rml_core::prelude::warn;
 use syn::parse::{ParseStream};
 
 mod structs;
@@ -16,8 +17,8 @@ pub fn rml(input: TokenStream) -> TokenStream {
     
     // Parse the transformed input
     let transformed_input: TokenStream = match transformed_string.parse() {
-        Ok(tokens) => { println!("Transformed input"); tokens },
-        Err(_) => { println!("original input"); input }, // Fallback to original if transformation fails
+        Ok(tokens) => tokens,
+        Err(_) => { warn!("Failed to transform input"); input }, // Fallback to original if transformation fails
     };
 
     let res = syn::parse::Parser::parse(|input: ParseStream| {
