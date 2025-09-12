@@ -2,6 +2,7 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::{format_ident, quote};
 
+use rml_core::prelude::info;
 use syn::parse::{Parse, ParseBuffer, ParseStream};
 use syn::{parse_macro_input, Ident, Lit, Token, Expr, ExprPath, Member, LitStr};
 
@@ -34,10 +35,17 @@ struct ImportStatement {
 }
 
 // Component definition parsed from a .rml file
+// #[derive(Clone)]
+// struct ComponentDefinition {
+//     name: String,
+//     node: RmlNode,
+// }
+
 #[derive(Clone)]
 struct ComponentDefinition {
     name: String,
-    node: RmlNode,
+    path: String,
+    parent_path: String,
 }
 
 impl PropertyKey {
@@ -223,16 +231,22 @@ fn load_components_from_path(path: &str) -> Result<Vec<ComponentDefinition>, Box
                 .to_string();
             
             // Read and parse the component file
-            let file_content = fs::read_to_string(&file_path)?;
-            let file_content = transform_dollar_syntax(&file_content);
+            // let file_content = fs::read_to_string(&file_path)?;
+            // let file_content = transform_dollar_syntax(&file_content);
             
-            // Parse the RML content as a component
-            if let Ok(component_node) = parse_component_content(&file_content) {
-                components.push(ComponentDefinition {
-                    name: component_name,
-                    node: component_node,
-                });
-            }
+            // // Parse the RML content as a component
+            // if let Ok(component_node) = parse_component_content(&file_content) {
+            //     components.push(ComponentDefinition {
+            //         name: component_name,
+            //         node: component_node,
+            //     });
+            // }
+
+            components.push(ComponentDefinition {
+                name: component_name,
+                path: file_path.as_path().to_str().unwrap().to_string(),
+                parent_path: components_dir.to_str().unwrap().to_string(),
+            });
         }
     }
     
@@ -258,22 +272,24 @@ pub fn rml(input: TokenStream) -> TokenStream {
         Ok(tokens) => { println!("Transformed input"); tokens },
         Err(_) => { println!("original input"); input }, // Fallback to original if transformation fails
     };
-    
+
+    // we need to change the logic to parse the imports of the main file, and then parse the import of the potentialy imported files,
+    // with a scoped logic 
+
     //Try to parse as RmlParser first (with imports), fallback to RmlNode for backward compatibility
-    let (parsed_node, components) = if let Ok(rml_parser) = syn::parse::<RmlParser>(transformed_input.clone()) {
-        (rml_parser.root_node, rml_parser.components)
-    } else {
-        let parsed = parse_macro_input!(transformed_input as RmlNode);
-        (parsed, HashMap::new())
-    };
-
-
-    // let (parsed_node, components) = {
+    // let (parsed_node, components) = if let Ok(rml_parser) = syn::parse::<RmlParser>(transformed_input.clone()) {
+    //     (rml_parser.root_node, rml_parser.components)
+    // } else {
     //     let parsed = parse_macro_input!(transformed_input as RmlNode);
     //     (parsed, HashMap::new())
     // };
 
-    //println!("Components: {:#?}", components.keys());
+    //let res = syn::parse::<RmlParser>(transformed_input.clone()).unwrap();
+    let res = syn::parse::Parser::parse(|input: ParseStream| {
+        RmlParser::parse_with_path(input, "".to_string())
+    }, transformed_input.clone()).unwrap();
+
+    let (parsed_node, components) = (res.root_node, res.components);
     
     let generated = parsed_node.generate_with_components(&components);
     let generated_node = generated.1;
@@ -565,6 +581,62 @@ struct RmlParser {
     root_node: RmlNode,
 }
 
+impl RmlParser {
+    fn parse_with_path(input: ParseStream, parent_path: String) -> syn::Result<Self> {
+        let mut components = HashMap::new();
+        
+        info!("RmlParser::parse new");
+
+        // Parse imports first
+        while input.peek(Ident) && input.peek2(LitStr) {
+            // Check if this is an import statement by looking ahead
+            let fork = input.fork();
+            if let Ok(ident) = fork.parse::<Ident>() {
+                if ident == "import" {
+                    let import: ImportStatement = input.parse()?;
+                    
+                    // Load components from the import path
+                    // Resolve the path: if relative and we have a parent, combine them
+                    let resolved_path = if Path::new(&import.path).is_absolute() {
+                        // path is absolute
+                        import.path.to_string()
+                    } else {
+                        //get the dir part of the parent path
+                        info!("Parent path: {}", &parent_path);
+                        Path::new(&parent_path).parent().unwrap_or(Path::new("")).join(&import.path).to_string_lossy().to_string()
+                    };
+
+                    info!("Resolved path: {}", &resolved_path);
+
+                    if let Ok(loaded_components) = load_components_from_path(&resolved_path) {
+                        for component in loaded_components {
+                            let component_name = if let Some(alias) = &import.alias {
+                                format!("{}::{}", alias, component.name)
+                            } else {
+                                component.name.clone()
+                            };
+                            
+                            println!("Component name d: {} {} {}", component_name, component.name, component.path);
+                            components.insert(component_name, component);
+                        }
+                    }
+                    continue;
+                }
+            }
+            break;
+        }
+        
+        // Parse the root node
+        let root_node: RmlNode = input.parse()?;
+        
+        Ok(RmlParser {
+            components,
+            root_node,
+        })
+    }
+}
+
+
 impl Parse for ImportStatement {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         // Parse "import" as an identifier
@@ -574,7 +646,7 @@ impl Parse for ImportStatement {
         }
         
         let path_str: LitStr = input.parse()?;
-        let path = path_str.value();
+        let path = path_str.value(); //"components".to_string(); 
         
         let alias = if input.peek(Token![as]) {
             input.parse::<Token![as]>()?;
@@ -584,7 +656,7 @@ impl Parse for ImportStatement {
             None
         };
 
-        println!("Alias: {:#?}", alias);
+        println!("Alias: {:#?}, path: {:#?}", alias, path);
         
         Ok(ImportStatement { path, alias })
     }
@@ -594,6 +666,8 @@ impl Parse for RmlParser {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut components = HashMap::new();
         
+        info!("RmlParser::parse s");
+
         // Parse imports first
         while input.peek(Ident) && input.peek2(LitStr) {
             // Check if this is an import statement by looking ahead
@@ -611,7 +685,7 @@ impl Parse for RmlParser {
                                 component.name.clone()
                             };
                             
-                            println!("Component name: {}", component_name);
+                            println!("Component name d: {} {} {}", component_name, component.name, component.path);
                             components.insert(component_name, component);
                         }
                     }
@@ -724,12 +798,18 @@ impl RmlNode {
     fn generate_with_components(&self, components: &HashMap<String, ComponentDefinition>) -> GenResult {
         let node_type_str = self._ident.to_string();
 
+        // display all components
+        // for (name, component) in components {
+        //     println!("Component name generate_with_components: {}", name);
+        //     //component.node.generate_with_components(components);
+        // }
+
         // Check if this is a custom component
         if let Some(component_def) = components.get(&node_type_str) {
             // For custom components, we expand them by generating the component's node
             // and applying the properties passed to the component
             println!("Generating custom component: {}", node_type_str);
-            let cmp = self.generate_custom_component(component_def, components);
+            let cmp = self.generate_custom_component(component_def);
             //println!("Generated custom component: {} {}", cmp.0, cmp.1);
             return cmp;
         }
@@ -1012,9 +1092,24 @@ impl RmlNode {
         (id, node_code, functions_code, initializer_code)
     }
     
-    fn generate_custom_component(&self, component_def: &ComponentDefinition, components: &HashMap<String, ComponentDefinition>) -> GenResult {
-        // Clone the component's node and apply the properties from this instance
-        let mut component_node = component_def.node.clone();
+    fn generate_custom_component(&self, component_def: &ComponentDefinition) -> GenResult {
+        // Read and parse the component file
+        info!("Reading component file: {}", component_def.path);
+
+        let file_content = fs::read_to_string(&component_def.path).unwrap();
+        let file_content = transform_dollar_syntax(&file_content);
+
+        let tokens: proc_macro::TokenStream = file_content.parse().unwrap();
+
+        
+        //let res = syn::parse::<RmlParser>(tokens.clone()).unwrap();
+        let res= syn::parse::Parser::parse(|input: ParseStream| {
+          RmlParser::parse_with_path(input, component_def.path.clone())
+        }, tokens.clone()).unwrap();
+
+        let (mut component_node, components) = (res.root_node, res.components);
+
+
         let original_id: String = match component_node.properties.iter().find(|(k, _)| k.to_string() == "id".to_string()) {
             Some(id) => id.1.to_string(),
             None => String::from(""),
@@ -1038,7 +1133,7 @@ impl RmlNode {
         component_node.children.extend(self.children.clone());
         
         // Generate the component with the applied properties
-        let component_gen_res = component_node.generate_with_components(components);
+        let component_gen_res = component_node.generate_with_components(&components);
         let new_id = component_gen_res.0.clone();
 
         // replace the original id present in the component (in callbacks) with the new id
