@@ -35,9 +35,9 @@ async fn main() {
                 anchors: center
                 width: 300
                 height: 100
+
                 color: "rgba(0.9, 0.9, 0.9, 1.0)"
                 counter: 0
-                
                 
                 Text {
                     id: counter_text
@@ -131,7 +131,7 @@ async fn main() {
                 margins: 20
                 text: "Click buttons to test $ syntax - check console for debug output"
                 color: "rgba(0.2, 0.2, 0.2, 1.0)"
-                font_size: 12
+                font_size: 14
             }
         }
     );

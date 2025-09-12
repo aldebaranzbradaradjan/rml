@@ -35,6 +35,7 @@ async fn main() {
             // Use the imported Button component
             Button {
                 id: main_button
+                
                 anchors: top | left
                 margins: 20
                 text: "Click Me!"
