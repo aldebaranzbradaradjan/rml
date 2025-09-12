@@ -8,38 +8,38 @@ Not intended for production use — just have fun!
 ## Example
 ```rust
 let mut engine = rml!(
-        import "components" as UI
+    import "components" as UI
 
-        Node {
-            id: root
-            width: 200
-            height: 200
-            text: "Please don't hit my button!"
+    Node {
+        id: root
+        width: 200
+        height: 200
+        text: "Please don't hit my button!"
 
-            signal click
+        signal click
 
+        on_click: {
+            $.root.text = "outch!".to_string();
+        }
+        
+        Text {
+            anchors: center
+            text: { $.root.text }
+            color: { WHITE }
+            font_size: 16
+        }
+
+        UI::Button {
+            id: test_btn
+            anchors: center | bottom
+            text: "Click me!"
+            color: { BLACK }
             on_click: {
-                $.root.text = "outch!".to_string();
-            }
-            
-            Text {
-                anchors: center
-                text: { $.root.text }
-                color: { WHITE }
-                font_size: 16
-            }
-
-            UI::Button {
-                id: test_btn
-                anchors: center | bottom
-                text: "Click me!"
-                color: { BLACK }
-                on_click: {
-                    emit!(engine, root, click);
-                }
+                emit!(engine, root, click);
             }
         }
-    );
+    }
+);
 ```
 
 ## Result example  (main example)
