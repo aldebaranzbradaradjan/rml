@@ -22,14 +22,19 @@ let mut engine = rml!(
 
     Node {
         id: root
-        width: 200
-        height: 200
+        anchors: fill
         text: "Please don't hit my button!"
 
         signal click
 
         on_click: {
             $.root.text = "outch!".to_string();
+        }
+
+        Rectangle {
+            anchors: fill
+            margins: 10
+            color: { GRAY }
         }
         
         Text {
@@ -42,8 +47,8 @@ let mut engine = rml!(
         UI::Button {
             id: test_btn
             anchors: center | bottom
+            margins: 20
             text: "Click me!"
-            color: { BLACK }
             on_click: {
                 emit!(engine, root, click);
             }
