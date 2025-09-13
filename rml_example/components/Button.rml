@@ -21,7 +21,7 @@ Rectangle {
         anchors: center
         text: { $.root_btn_template.text }
         color: { WHITE }
-        font_size: 16
+        font_size: 24
     }
     
     MouseArea {

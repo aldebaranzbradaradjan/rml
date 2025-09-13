@@ -1,7 +1,17 @@
 # RML – Rustic Markup Language
 A lightweight QML-like toolkit written in Rust
 
-## Why?
+## Version
+0.1.1
+
+## About
+RML is a simple DSL for creating 2D GUIs in Rust.
+It rely on macroquad for rendering and input handling.
+The DSL is computed by a not so complicated macro in an Arena Tree at build time before being rendered at runtime.
+The DSL don't have scripting capabilities, instead it allow to use Rust code in callbacks and functions.
+The arena node access is made with engine calls or with sugar $ notation.
+I hope to simplify things a bit and make it more readable in the futur.
+
 This project is a small playground to experiment with ideas and learn.
 Not intended for production use — just have fun!
 
@@ -58,7 +68,7 @@ The parts listed below barely works for some.
 
 * Core engine for node arena, event system, properties, and callbacks ✅
 
-* Callbacks, functions (can accept engine contexte but no return value), and initial values can be defined in Rust directly in the DSL ✅
+* Callbacks, functions (can accept engine context but no return value), and initial values can be defined in Rust directly in the DSL ✅
 
 * Basic anchor system ✅
 
@@ -82,7 +92,11 @@ The parts listed below barely works for some.
 
 * Better functions declaration (ability to return values)
 
-* Rework the rapid access syntax to get rid of the need for the $ macro and :f32 :string etc syntax
+* Rework the rapid access syntax to get rid of the need for the $ and :f32 :string etc syntax
+
+* Extend import logic (multiple imports per file, global import at root node)
+
+* Better text node (with font support)
 
 * Add an Image node type
 
@@ -95,10 +109,6 @@ The parts listed below barely works for some.
 * Data models:
     * ListModel, TableModel via declarative Rust macros
     * Support for field access, sorting, and filtering
-
-* Resource system:
-    * Declare and include assets (e.g., images, fonts) from a folder
-    * Bundle with executable
 
 * Rename to CML (Cute Markup Language) or RTML (Rustic Markup Language - Rust Toy Markup Language - Real Tiny Markup Language ? Real Time Markup Language ??)
 I'm considering renaming it to CML (Cute Markup Language) or RTML - a more playful alternative to RML, which could be misinterpreted as Rust Markup Language.

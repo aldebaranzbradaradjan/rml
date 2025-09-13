@@ -1,6 +1,6 @@
 [package]
 name = "rml_example"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 [[bin]]
@@ -23,6 +23,9 @@ path = "src/dollar_syntax_test.rs"
 name = "outch"
 path = "src/outch_test.rs"
 
+[[bin]]
+name = "smiley"
+path = "src/smiley_example.rs"
 
 [dependencies]
 rml_core = { path = "../rml_core" }
