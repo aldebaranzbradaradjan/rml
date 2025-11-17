@@ -1,17 +1,17 @@
 
 Rectangle {
     id: root_btn_template
-    width: 100
-    height: 40
-    text: "Button"
-    base_color: { Color::new(0.3, 0.8, 0.6, 1.0) }
-    hovered: false
-    pushed: false
+    number width: 150
+    number height: 40
+    string text: "Button"
+    color base_color: { Color::new(0.3, 0.8, 0.6, 1.0) }
+    bool hovered: false
+    bool pushed: false
 
-    color: {
-        let mut color = $.root_btn_template.base_color:color;
-        if $.root_btn_template.pushed:bool { darker_color(color, 0.1) }
-        else if $.root_btn_template.hovered:bool { lighter_color(color, 0.1) }
+    color color: {
+        let mut color = $.root_btn_template.base_color;
+        if $.root_btn_template.pushed { darker_color(color, 0.1) }
+        else if $.root_btn_template.hovered { lighter_color(color, 0.1) }
         else { color }
     }
 
@@ -20,8 +20,8 @@ Rectangle {
     Text {
         anchors: center
         text: { $.root_btn_template.text }
-        color: { WHITE }
-        font_size: 24
+        color color: { WHITE }
+        number font_size: 24
     }
     
     MouseArea {

@@ -1,13 +1,14 @@
 
 use proc_macro2::Span;
 use quote::{format_ident, quote};
-use rml_core::prelude::info;
+use rml_core::prelude::{info, warn, RED};
 use syn::parse::{Parse, ParseBuffer, ParseStream};
 use syn::{Ident, Lit, Token, Expr, ExprPath, Member, LitStr};
 use uuid::Uuid;
-use rml_core::{ItemTypeEnum};
+use rml_core::{AbstractValue, ItemTypeEnum, PropertyName};
 use std::collections::HashMap;
 use std::fs;
+use regex::Regex;
 use std::path::Path;
 
 use crate::structs::*;
@@ -109,8 +110,25 @@ pub fn property_parse(content: &ParseBuffer) -> Result<Value, syn::Error> {
             value = Value::Ident(content.parse()?);
         }
     } else if content.peek(syn::token::Brace) {
-        let block: syn::Block = content.parse()?;
-        value = Value::Block(block);
+        println!("Parsing block value");
+        println!("Content before parsing: {}", content.to_string());
+
+        // Just try to parse the block directly and ignore any $ syntax errors for now
+        match content.parse::<syn::Block>() {
+            Ok(block) => {
+                println!("Parsed block directly");
+                value = Value::Block(block);
+            }
+            Err(_) => {
+                println!("Failed to parse block directly, creating dummy block, the content : {}", content.to_string());
+                // If parsing fails due to $ syntax, create a dummy block
+                value = Value::Ident(Ident::new("test", Span::call_site()));
+            }
+        }
+
+        println!("Parsed block value");
+        println!("Content after parsing: {}", content.to_string());
+
     } else {
         return Err(content.error("Expected literal, identifier or block"));
     }
@@ -119,6 +137,10 @@ pub fn property_parse(content: &ParseBuffer) -> Result<Value, syn::Error> {
 
 
 impl RmlParser {
+    pub fn empty() -> RmlParser {
+        RmlParser { components: HashMap::new(), root_node: RmlNode { _ident: "".to_string(), properties: Vec::new(), children: Vec::new(), functions: Vec::new() } }
+    }
+
     pub fn parse_with_path(input: ParseStream, parent_path: String) -> syn::Result<Self> {
         let mut components = HashMap::new();
         // Parse imports first
@@ -157,10 +179,12 @@ impl RmlParser {
         
         // Parse the root node
         let root_node: RmlNode = input.parse()?;
-        
+
+        println!("Finished parsing RmlParser");
+
         Ok(RmlParser {
             components,
-            root_node,
+            root_node
         })
     }
 }
@@ -221,15 +245,43 @@ impl Parse for RmlNode {
                 // Check for signal declaration first
                 if content.peek(Ident) {
                     let fork = content.fork();
-                    if let Ok(signal_keyword) = fork.parse::<Ident>() {
-                        if signal_keyword == "signal" {
+                    if let Ok(keyword) = fork.parse::<Ident>() {
+                        if keyword == "signal" {
                             // parse signal declaration: signal identifier
                             content.parse::<Ident>()?; // consume "signal" string
                             let signal_name: Ident = content.parse()?;
                             content.parse::<Token![,]>().ok();
                             // add signal as a special property
-                            properties.push((PropertyKey::Signal(signal_name), Value::Ident(Ident::new("signal", Span::call_site()))));
+                            properties.push((PropertyType::Signal, PropertyKey::Signal(signal_name), Value::Ident(Ident::new("signal", Span::call_site()))));
                             continue;
+                        }
+
+                        if keyword == "number" || keyword == "bool" || keyword == "string" || keyword == "color" {
+
+                            let property_type = match keyword.to_string().as_str() {
+                                "number" => PropertyType::Number,
+                                "bool" => PropertyType::Bool,
+                                "string" => PropertyType::String,
+                                "color" => PropertyType::Color,
+                                _ => PropertyType::Unknown,
+                            };
+
+                            // parse signal declaration: signal identifier
+                            content.parse::<Ident>()?; // consume "signal" string
+                            let fork = content.fork();
+                            if let Ok(_key) = parse_property_key(&fork) {
+                                if fork.peek(Token![:]) {
+                                    // assume it's a property
+                                    let key = parse_property_key(&content)?;
+                                    content.parse::<Token![:]>()?;
+                                    println!("Parsing property: {}", key.to_string());
+                                    let value = property_parse(&content)?;
+                                    content.parse::<Token![,]>().ok();
+                                    properties.push((property_type, key, value));
+                                    println!("Just parsed property");
+                                    continue;
+                                }
+                            }
                         }
                     }
                 }
@@ -243,9 +295,11 @@ impl Parse for RmlNode {
                         // assume it's a property
                         let key = parse_property_key(&content)?;
                         content.parse::<Token![:]>()?;
+                        println!("Parsing property: {}", key.to_string());
                         let value = property_parse(&content)?;
                         content.parse::<Token![,]>().ok();
-                        properties.push((key, value));
+                        properties.push((PropertyType::Unknown, key, value));
+                        println!("Just parsed property");
                         continue;
                     }
                 }
@@ -261,6 +315,8 @@ impl Parse for RmlNode {
             }
         }
 
+        println!("Finished parsing RmlNode: {}", _ident);
+
         Ok(Self {
             _ident,
             properties,
@@ -272,15 +328,15 @@ impl Parse for RmlNode {
 
 
 impl RmlNode {
-    
-    pub fn generate_with_components(&self, components: &HashMap<String, ComponentDefinition>) -> GenResult {
+
+    pub fn generate_with_components_and_counter(&mut self, components: &HashMap<String, ComponentDefinition>, id_counter: &mut u32, properties_mapping: &HashMap<String, AbstractValue>) -> GenResult {
         let node_type_str = self._ident.to_string();
 
         // Check if this is a custom component
         if let Some(component_def) = components.get(&node_type_str) {
             // For custom components, we expand them by generating the component's node
             // and applying the properties passed to the component
-            let cmp = self.generate_custom_component(component_def);
+            let cmp = self.generate_custom_component_with_counter(component_def, id_counter, properties_mapping);
             return cmp;
         }
 
@@ -296,21 +352,28 @@ impl RmlNode {
         let id = self
             .properties
             .iter()
-            .find_map(|(k, v)| {
+            .find_map(|(t, k, v)| {
                 if k.to_string() == "id" { 
                     Some(v.to_string()) 
                 } else { 
                     None 
                 }
             })
-            .unwrap_or_else(|| format!("generated_id_{}", Uuid::new_v4().simple().to_string()));
+            .unwrap_or_else(|| {
+                let n_id = format!("generated_id_{}", id_counter);
+                *id_counter += 1;
+                n_id
+            });
+
+        println!("real new id  {} and counter : {}", id, id_counter);
 
         let temp_node = format_ident!("temp_node_{}", id);
 
         let child_results: Vec<GenResult> = self
             .children
-            .iter()
-            .map(|child| child.generate_with_components(components))
+            //.iter()
+            .iter_mut()
+            .map(|child| child.generate_with_components_and_counter(components, id_counter, properties_mapping))
             .collect();
 
         let child_code: Vec<proc_macro2::TokenStream> = child_results
@@ -334,7 +397,7 @@ impl RmlNode {
         let initializer: Vec<proc_macro2::TokenStream> = self
             .properties
             .iter()
-            .map(|(k, v)| {
+            .map(|(t, k, v)| {
                 let k_string = k.to_string();
                 let k_ident = k.to_ident();
                 
@@ -433,7 +496,7 @@ impl RmlNode {
         let properties: Vec<proc_macro2::TokenStream> = self
             .properties
             .iter()
-            .map(|(k, v)| {
+            .map(|(t, k, v)| {
                 let k_string = k.to_string();
                 let k_ident = k.to_ident();
                 
@@ -459,7 +522,7 @@ impl RmlNode {
                     let event_name = k_string.trim_start_matches("on_");
                     
                     // Check if this is a custom signal handler
-                    let is_custom_signal = self.properties.iter().any(|(prop_key, _)| {
+                    let is_custom_signal = self.properties.iter().any(|(_, prop_key, _)| {
                         prop_key.is_signal() && prop_key.to_string() == event_name
                     });
                     
@@ -570,11 +633,49 @@ impl RmlNode {
 
         (id, node_code, functions_code, initializer_code)
     }
-    
-    fn generate_custom_component(&self, component_def: &ComponentDefinition) -> GenResult {
+
+    fn generate_custom_component_with_counter(&self, component_def: &ComponentDefinition, id_counter: &mut u32, properties_mapping: &HashMap<String, AbstractValue>) -> GenResult {
         // Read and parse the component file
         let file_content = fs::read_to_string(&component_def.path).unwrap();
-        let file_content = transform_dollar_syntax(&file_content);
+
+        // we need to perform the id diversification in advance
+        // to be able to find it in the properties_mapping
+
+        // find id: value in file_content with a regex (without quotes)
+        let re = Regex::new(r#"id:\s*(\w+)"#).unwrap();
+        let file = file_content.clone();
+        let original_id = re.captures(&file)
+            .and_then(|caps| caps.get(1))
+            .map(|m| m.as_str())
+            .unwrap_or("");
+
+
+        let n_id = format!("generated_id_{}", id_counter);
+        *id_counter += 1;
+
+        // maybe there is id property in self.properties, so we need to use that instead
+        let n_id = self.properties.iter().find_map(|(t, k, v)| {
+            if k.to_string() == "id" { 
+                Some(v.to_string()) 
+            } else { 
+                None 
+            }
+        }).unwrap_or_else(|| n_id);
+
+
+        let file_content = if !original_id.is_empty() {
+            file_content.replace(original_id, &n_id)
+        } else {
+            file_content
+        };
+
+        println!("Custom component original id: {}, new id: {}", original_id, n_id);
+
+        // display properties_mapping and check if we have the n_id there
+        //println!("Custom component properties mapping: {:#?}", properties_mapping);
+        println!("Custom component properties mapping contains n_id: {}", properties_mapping.contains_key(&n_id));
+
+        let file_content = transform_dollar_syntax(&file_content, properties_mapping);
         let tokens: proc_macro::TokenStream = file_content.parse().unwrap();
 
         let res= syn::parse::Parser::parse(|input: ParseStream| {
@@ -583,22 +684,22 @@ impl RmlNode {
 
         let (mut component_node, components) = (res.root_node, res.components);
 
-        let original_id: String = match component_node.properties.iter().find(|(k, _)| k.to_string() == "id".to_string()) {
-            Some(id) => id.1.to_string(),
-            None => String::from(""),
-        };
+        // let original_id: String = match component_node.properties.iter().find(|(k, _)| k.to_string() == "id".to_string()) {
+        //     Some(id) => id.1.to_string(),
+        //     None => String::from(""),
+        // };
 
         // remove id property if exist
-        component_node.properties.retain(|(k, _)| k.to_string() != "id".to_string());
+        //component_node.properties.retain(|(k, _)| k.to_string() != "id".to_string());
 
         // Override the component's properties with the ones passed to this instance
-        for (prop_key, prop_value) in &self.properties {
+        for (prop_type, prop_key, prop_value) in &self.properties {
             // Find if this property already exists in the component
-            if let Some(existing_prop) = component_node.properties.iter_mut().find(|(k, _)| k.to_string() == prop_key.to_string()) {
-                existing_prop.1 = prop_value.clone();
+            if let Some(existing_prop) = component_node.properties.iter_mut().find(|(_, k, _)| k.to_string() == prop_key.to_string()) {
+                existing_prop.2 = prop_value.clone();
             } else {
                 // Add new property
-                component_node.properties.push((prop_key.clone(), prop_value.clone()));
+                component_node.properties.push((prop_type.clone(), prop_key.clone(), prop_value.clone()));
             }
         }
         
@@ -606,7 +707,7 @@ impl RmlNode {
         component_node.children.extend(self.children.clone());
         
         // Generate the component with the applied properties
-        let component_gen_res = component_node.generate_with_components(&components);
+        let component_gen_res = component_node.generate_with_components_and_counter(&components, id_counter, properties_mapping);
         let new_id = component_gen_res.0.clone();
 
         // replace the original id present in the component (in callbacks) with the new id
@@ -636,5 +737,213 @@ impl RmlNode {
         }
 
         (new_id, component_code, functions_code, initializer_code)
+    }
+
+    pub fn pre_generate_with_components_and_counter(&mut self, components: &HashMap<String, ComponentDefinition>, id_counter: &mut u32) -> HashMap<String, AbstractValue> {
+        println!("pre_generate_with_components");
+        let node_type_str = self._ident.to_string();
+
+        // Check if this is a custom component
+        if let Some(component_def) = components.get(&node_type_str) {
+            // For custom components, we expand them by generating the component's node
+            // and applying the properties passed to the component
+            let cmp = self.pre_generate_custom_component_with_counter(component_def, id_counter);
+            return cmp;
+        }
+        
+        // search for the id property and generate a uuid if not found
+        let id: String = self
+            .properties
+            .iter()
+            .find_map(|(t, k, v)| {
+                if k.to_string() == "id" { 
+                    Some(v.to_string()) 
+                } else { 
+                    None 
+                }
+            })
+            .unwrap_or_else(|| {
+                let n_id = format!("generated_id_{}", id_counter);
+                *id_counter += 1;
+                n_id
+            });
+
+        println!("new id  {} and counter : {}", id, id_counter);
+
+        // for each child, we need to merge the hashmap into a single one
+        let mut merged_child_results: HashMap<String, AbstractValue> = HashMap::new();
+        for i in 0..self.children.len() {
+            merged_child_results.extend(self.children[i].pre_generate_with_components_and_counter(components, id_counter));
+        }
+
+        // Generate the properties code
+        // We need to check if the property is a block with initializer, a callback or a value
+
+        // by typing the property system we can avoid some issues later
+        // we must impl sometthing like : 
+        /*
+        pub enum PropertyKey {
+            Simple(
+                type: Type,
+                base: Ident
+            ),
+            Composed {
+                type: AbstractValue,
+                base: Ident, 
+                field: Ident 
+            },
+            Signal(Ident),
+        }
+
+        and support syntaxe like this in parser :
+         let mut engine = rml!(
+        import "components" as Components
+
+        Node {
+            id: root
+            number width: 500.0
+            number height: 500.0
+
+            Components::Button {
+                id: counter_btn
+                anchors: center
+                number counter: 0
+                string text: { format!("Counter: {}", $.counter_btn.counter) }
+                on_click: { $.counter_btn.counter += 1.0; }
+                number val: 10.0
+            }
+        }
+    );
+
+    with special case id with type id and anchors
+        */
+
+        let mut properties: HashMap<String, AbstractValue> = self
+            .properties
+            .iter()
+            .map(|(t, k, v)| {
+                let k_string = k.to_string();
+                
+                // Handle signal declarations
+                if k.is_signal() {
+                    (format!("{}.{}", id, k.to_string()), AbstractValue::Null)
+                } else if k_string.starts_with("on_") && k_string.ends_with("_changed") {
+                    (format!("{}.{}", id, k.to_string()), AbstractValue::Null)
+                } else if k_string.starts_with("on_") {
+                    (format!("{}.{}", id, k.to_string()), AbstractValue::Null)
+                } else {
+                    // let value = match v {
+
+                    //     // here use type to know what to put istead of null
+
+                    //     Value::Block(_block) => {
+                    //         let value_type= match t {
+                    //             PropertyType::Number => AbstractValue::Number(0.0),
+                    //             PropertyType::Bool => AbstractValue::Bool(false),
+                    //             PropertyType::String => AbstractValue::String("".to_string()),
+                    //             PropertyType::Color => AbstractValue::Color(RED),
+                    //             _ => AbstractValue::Null,
+                    //         };
+
+                    //         (format!("{}.{}", id, k.to_string()), value_type)
+                    //     }
+                    //     _ => {
+                    //         let value = value_to_abstract_value(v);
+                    //         (format!("{}.{}", id, k.to_string()), value)  
+                    //     }
+                    // };
+
+                    let value_type= match t {
+                        PropertyType::Number => AbstractValue::Number(0.0),
+                        PropertyType::Bool => AbstractValue::Bool(false),
+                        PropertyType::String => AbstractValue::String("".to_string()),
+                        PropertyType::Color => AbstractValue::Color(RED),
+                        _ => AbstractValue::Null,
+                    };
+
+                    (format!("{}.{}", id, k.to_string()), value_type)
+                    //value
+                }
+            }).collect();
+
+        //println!("Props : {:#?}", properties);
+
+        properties.extend(merged_child_results);
+
+        if properties.get(&format!("{}.x", id)).is_none() {
+            properties.insert(format!("{}.{}", id, "x"), AbstractValue::Number(0.0));
+        }
+        if properties.get(&format!("{}.y", id)).is_none() {
+            properties.insert(format!("{}.{}", id, "y"), AbstractValue::Number(0.0));
+        }
+        if properties.get(&format!("{}.width", id)).is_none() {
+            properties.insert(format!("{}.{}", id, "width"), AbstractValue::Number(0.0));
+        }
+        if properties.get(&format!("{}.height", id)).is_none() {
+            properties.insert(format!("{}.{}", id, "height"), AbstractValue::Number(0.0));
+        }
+        if properties.get(&format!("{}.computed_x", id)).is_none() {
+            properties.insert(format!("{}.{}", id, "computed_x"), AbstractValue::Number(0.0));
+        }
+        if properties.get(&format!("{}.computed_y", id)).is_none() {
+            properties.insert(format!("{}.{}", id, "computed_y"), AbstractValue::Number(0.0));
+        }
+        if properties.get(&format!("{}.computed_width", id)).is_none() {
+            properties.insert(format!("{}.{}", id, "computed_width"), AbstractValue::Number(0.0));
+        }
+        if properties.get(&format!("{}.computed_height", id)).is_none() {
+            properties.insert(format!("{}.{}", id, "computed_height"), AbstractValue::Number(0.0));
+        }
+
+        properties
+    }
+    
+    fn pre_generate_custom_component_with_counter(&self, component_def: &ComponentDefinition, id_counter: &mut u32) -> HashMap<String, AbstractValue> {
+        println!("pre_generate_custom_component");
+        // Read and parse the component file
+        let file_content = fs::read_to_string(&component_def.path).unwrap();
+        let tokens: proc_macro::TokenStream = file_content.parse().unwrap();
+
+        let mut res = RmlParser::empty();
+        match syn::parse::Parser::parse(|input: ParseStream| {
+            res = RmlParser::parse_with_path(input, component_def.path.clone()).unwrap();
+            Ok(RmlParser::empty())
+        }, tokens.clone()) {
+            Ok(r) => r,
+            Err(_) => {
+                RmlParser::empty()
+            }
+        };
+
+        let (mut component_node, components) = (res.root_node, res.components);
+
+        // remove id property if exist
+        component_node.properties.retain(|(_, k, _)| k.to_string() != "id".to_string());
+
+        // Override the component's properties with the ones passed to this instance
+        for (prop_type, prop_key, prop_value) in &self.properties {
+            // Find if this property already exists in the component
+            if let Some(existing_prop) = component_node.properties.iter_mut().find(|(_, k, _)| k.to_string() == prop_key.to_string()) {
+                existing_prop.2 = prop_value.clone();
+                // warning if property type is set in this instance
+                // if *prop_type != PropertyType::Unknown {
+                //     warn!("Property type defined in component cannot be overridden: {:#?} in {}", prop_key, component_def.name);
+                // }
+
+                if !matches!(prop_type, PropertyType::Unknown) {
+                    warn!("Property type defined in component cannot be overridden: {:#?} in {}", prop_key, component_def.name);
+                }
+
+            } else {
+                // Add new property
+                component_node.properties.push((prop_type.clone(), prop_key.clone(), prop_value.clone()));
+            }
+        }
+        
+        // Add children from this instance to the component
+        component_node.children.extend(self.children.clone());
+        
+        // Generate the component with the applied properties
+        component_node.pre_generate_with_components_and_counter(&components, id_counter)
     }
 }

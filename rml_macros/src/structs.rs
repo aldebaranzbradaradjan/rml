@@ -2,7 +2,17 @@
 use quote::{format_ident};
 use syn::{Ident, Lit};
 use rml_core::{AbstractValue};
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Debug};
+
+#[derive(Debug, Clone)]
+pub enum PropertyType {
+    Number,
+    Bool,
+    String,
+    Color,
+    Signal,
+    Unknown
+}
 
 // struct to represent a property key
 // It can be a simple identifier or a composed one (base.field)
@@ -23,7 +33,7 @@ pub struct ImportStatement {
     pub alias: Option<String>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ComponentDefinition {
     pub name: String,
     pub path: String,
@@ -53,6 +63,16 @@ pub enum Value {
     Lit(Lit),
     Ident(Ident),
     Block(syn::Block),
+}
+
+impl Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Lit(lit) => write!(f, "Lit()"),
+            Value::Ident(ident) => write!(f, "Ident({})", ident),
+            Value::Block(block) => write!(f, "Block()"),
+        }
+    }
 }
 
 pub fn lit_to_string(literal: &Lit) -> Option<String> {
@@ -109,16 +129,28 @@ impl ToString for Value {
 #[derive(Clone)]
 pub struct RmlNode {
     pub _ident: String,
-    pub properties: Vec<(PropertyKey, Value)>,
+    pub properties: Vec<(PropertyType, PropertyKey, Value)>,
     pub children: Vec<RmlNode>,
-    pub functions: Vec<syn::ItemFn>,
+    pub functions: Vec<syn::ItemFn>
+}
+
+impl Debug for RmlNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RmlNode")
+            .field("_ident", &self._ident)
+            .field("properties", &self.properties)
+            .field("children", &self.children)
+            .field("functions", &self.functions.iter().map(|func| &func.sig.ident).collect::<Vec<&Ident>>())
+            .finish()
+    }
 }
 
 /// Main RML parser that includes imports
+
+#[derive(Debug)]
 pub struct RmlParser {
     pub components: HashMap<String, ComponentDefinition>,
     pub root_node: RmlNode,
 }
-
 
 pub type GenResult = (String, proc_macro2::TokenStream, proc_macro2::TokenStream, proc_macro2::TokenStream);

@@ -11,23 +11,46 @@ use format::*;
 
 #[proc_macro]
 pub fn rml(input: TokenStream) -> TokenStream {
-    // First, transform the input to replace $ syntax before parsing
-    let input_string = input.to_string();
-    let transformed_string = transform_dollar_syntax(&input_string);
     
-    // Parse the transformed input
-    let transformed_input: TokenStream = match transformed_string.parse() {
-        Ok(tokens) => tokens,
-        Err(_) => { warn!("Failed to transform input"); input }, // Fallback to original if transformation fails
+    let input_string = input.to_string();
+    //let input_string = transform_dollar_syntax(&input_string);
+    
+    // First parse
+    let transformed_input: TokenStream = input_string.parse().unwrap();
+    let mut res = RmlParser::empty();
+    match syn::parse::Parser::parse(|input: ParseStream| {
+        res = RmlParser::parse_with_path(input, "".to_string()).unwrap();
+        Ok(RmlParser::empty())
+    }, transformed_input.clone()) {
+        Ok(r) => r,
+        Err(e) => {
+            RmlParser::empty()
+        }
     };
 
+    // now we need equivalent process to parsed_node.generate_with_components(&components);
+    // but only to develop children components, and be sure to use a deterministic way to rename items (a global counter should do the tricks)
+    // after that we could be able to map a list of property name with theirs types
+    let (mut parsed_node, components) = (res.root_node, res.components);
+    let properties_mapping = parsed_node.pre_generate_with_components_and_counter(&components, &mut 0);
+
+    println!("Res : {:#?}", properties_mapping);
+
+    // we have the struct of the application, and can infer property type, and use it in transform_dollar_syntax
+
+    // transform the input to replace $ syntax before parsing
+    let input_string = transform_dollar_syntax(&input_string, &properties_mapping);
+    // Parse the transformed input
+    let transformed_input: TokenStream = input_string.parse().unwrap();
     let res = syn::parse::Parser::parse(|input: ParseStream| {
         RmlParser::parse_with_path(input, "".to_string())
     }, transformed_input.clone()).unwrap();
 
-    let (parsed_node, components) = (res.root_node, res.components);
+    println!("Parsed RML AST");
+
+    let (mut parsed_node, components) = (res.root_node, res.components);
     
-    let generated = parsed_node.generate_with_components(&components);
+    let generated = parsed_node.generate_with_components_and_counter(&components, &mut 0, &properties_mapping);
     let generated_node = generated.1;
     let generated_functions = generated.2;
     let generated_initializer = generated.3;
@@ -60,5 +83,10 @@ pub fn rml(input: TokenStream) -> TokenStream {
             engine
         }
     };
+    // let result = quote! {
+    //     RmlEngine::new()
+    // };
+
+
     TokenStream::from(result)
 }

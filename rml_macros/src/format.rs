@@ -1,5 +1,7 @@
 
-use std::process::{Command, Stdio};
+use std::{collections::HashMap, process::{Command, Stdio}};
+
+use rml_core::AbstractValue;
 
 pub fn format_code_for_binding_extraction(code: &str) -> String {
     // remove line jumps;
@@ -33,7 +35,7 @@ pub fn format_code(code: &str) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
-pub fn transform_dollar_syntax(code: &str) -> String {
+pub fn transform_dollar_syntax(code: &str, properties_mapping: &HashMap<String, AbstractValue>) -> String {
     use regex::Regex;
     
     // Only transform if there are actually $ expressions
@@ -43,16 +45,40 @@ pub fn transform_dollar_syntax(code: &str) -> String {
     
     let mut result = code.to_string();
     
-    // Handle compound assignments first: $.node.prop += value;
+    // Handle compound assignments first: $.node.prop += value; ([+\-*/])=
     let compound_assign_pattern = Regex::new(r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*([+\-*/])=\s*([^;]+)\s*;").unwrap();
     result = compound_assign_pattern.replace_all(&result, |caps: &regex::Captures| {
         let node_id = &caps[1];
         let property = &caps[2];
         let operator = &caps[3];
         let value = &caps[4].trim();
-        
-        format!("set_number!(engine, {}, {}, get_number!(engine, {}, {}) {} {});", 
-                node_id, property, node_id, property, operator, value)
+
+        // check if property is in the mapping
+        // format!("{}.{}", node_id, property)
+        let abstract_value = properties_mapping.get(&format!("{}.{}", node_id, property));
+
+        match Some(abstract_value) {
+            Some(Some(AbstractValue::String(_))) => {
+                if operator != "+" {
+                    panic!("Invalid operator '{}' for string property '{}.{}'. Only '+=' is allowed for strings.", operator, node_id, property);
+                }
+                format!("set_string!(engine, {}, {}, format!(\"{{}}{{}}\", get_string!(engine, {}, {}), {}));", 
+                    node_id, property, node_id, property, value)
+            },
+            Some(Some(AbstractValue::Bool(_))) => {
+                panic!("Compound assignments are not supported for boolean properties '{}.{}'.", node_id, property);
+            },
+            Some(Some(AbstractValue::Color(_))) => {
+                panic!("Compound assignments are not supported for color properties '{}.{}'.", node_id, property);
+            },
+            Some(Some(AbstractValue::Number(_))) => {
+                format!("set_number!(engine, {}, {}, get_number!(engine, {}, {}) {} {});", 
+                    node_id, property, node_id, property, operator, value)
+            }
+            _ => {
+                panic!("Can't find property '{}.{}'.", node_id, property);
+            }
+        }
     }).to_string();
     
     // Handle simple assignments: $.node.prop = value;
@@ -61,32 +87,71 @@ pub fn transform_dollar_syntax(code: &str) -> String {
         let node_id = &caps[1];
         let property = &caps[2];
         let value = &caps[3].trim();
-        
-        // Try to determine the type based on the value
-        if value.starts_with('"') || value.contains(".to_string()") || value.contains("String::") {
-            format!("set_string!(engine, {}, {}, {});", node_id, property, value)
-        } else if *value == "true" || *value == "false" {
-            format!("set_bool!(engine, {}, {}, {});", node_id, property, value)
-        } else {
-            format!("set_number!(engine, {}, {}, {});", node_id, property, value)
+
+        let abstract_value = properties_mapping.get(&format!("{}.{}", node_id, property));
+        match Some(abstract_value) {
+            Some(Some(AbstractValue::String(_))) => {
+                format!("set_string!(engine, {}, {}, {});", node_id, property, value)
+            },
+            Some(Some(AbstractValue::Bool(_))) => {
+                format!("set_bool!(engine, {}, {}, {});", node_id, property, value)
+            },
+            Some(Some(AbstractValue::Color(_))) => {
+                format!("set_color!(engine, {}, {}, {});", node_id, property, value)
+            },
+            Some(Some(AbstractValue::Number(_))) => {
+                format!("set_number!(engine, {}, {}, {});", node_id, property, value)
+            }
+            _ => {
+                panic!("Can't find property '{}.{}'.", node_id, property);
+            }
         }
+        
+        // // Try to determine the type based on the value
+        // if value.starts_with('"') || value.contains(".to_string()") || value.contains("String::") {
+        //     format!("set_string!(engine, {}, {}, {});", node_id, property, value)
+        // } else if *value == "true" || *value == "false" {
+        //     format!("set_bool!(engine, {}, {}, {});", node_id, property, value)
+        // } else {
+        //     format!("set_number!(engine, {}, {}, {});", node_id, property, value)
+        // }
     }).to_string();
     
-    // Handle typed read operations first: $.node.prop:type
-    let typed_pattern = Regex::new(r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*):([a-zA-Z0-9_]+)\b").unwrap();
-    result = typed_pattern.replace_all(&result, |caps: &regex::Captures| {
-        let node_id = &caps[1];
-        let property = &caps[2];
-        let type_hint = &caps[3];
+    // // Handle typed read operations first: $.node.prop:type
+    // let typed_pattern = Regex::new(r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*):([a-zA-Z0-9_]+)\b").unwrap();
+    // result = typed_pattern.replace_all(&result, |caps: &regex::Captures| {
+    //     let node_id = &caps[1];
+    //     let property = &caps[2];
+    //     let type_hint = &caps[3];
         
-        match type_hint {
-            "f32" | "number" => format!("get_number!(engine, {}, {})", node_id, property),
-            "string" | "str" => format!("get_string!(engine, {}, {})", node_id, property),
-            "bool" => format!("get_bool!(engine, {}, {})", node_id, property),
-            "color" => format!("get_color!(engine, {}, {})", node_id, property),
-            _ => format!("get_value!(engine, {}, {})", node_id, property),
-        }
-    }).to_string();
+    //     // match type_hint {
+    //     //     "f32" | "number" => format!("get_number!(engine, {}, {})", node_id, property),
+    //     //     "string" | "str" => format!("get_string!(engine, {}, {})", node_id, property),
+    //     //     "bool" => format!("get_bool!(engine, {}, {})", node_id, property),
+    //     //     "color" => format!("get_color!(engine, {}, {})", node_id, property),
+    //     //     _ => format!("get_value!(engine, {}, {})", node_id, property),
+    //     // }
+
+    //     let abstract_value = properties_mapping.get(&format!("{}.{}", node_id, property));
+    //     match Some(abstract_value) {
+    //         Some(Some(AbstractValue::String(_))) => {
+    //             format!("get_string!(engine, {}, {});", node_id, property)
+    //         },
+    //         Some(Some(AbstractValue::Bool(_))) => {
+    //             format!("get_bool!(engine, {}, {});", node_id, property)
+    //         },
+    //         Some(Some(AbstractValue::Color(_))) => {
+    //             format!("get_color!(engine, {}, {});", node_id, property)
+    //         },
+    //         Some(Some(AbstractValue::Number(_))) => {
+    //             format!("get_number!(engine, {}, {});", node_id, property)
+    //         }
+    //         _ => {
+    //             panic!("Can't find property '{}.{}'.", node_id, property);
+    //         }
+    //     }
+
+    // }).to_string();
     
     // Handle regular read operations: $.node.prop (in expressions)
     // Be more careful to only match standalone expressions, not inside strings
@@ -95,9 +160,24 @@ pub fn transform_dollar_syntax(code: &str) -> String {
         let node_id = &caps[1];
         let property = &caps[2];
         
-        // Use the new get_value! macro that returns the AbstractValue
-        // The context will determine how it's used (to_string(), to_number(), etc.)
-        format!("get_value!(engine, {}, {})", node_id, property)
+        let abstract_value = properties_mapping.get(&format!("{}.{}", node_id, property));
+        match Some(abstract_value) {
+            Some(Some(AbstractValue::String(_))) => {
+                format!("get_string!(engine, {}, {})", node_id, property)
+            },
+            Some(Some(AbstractValue::Bool(_))) => {
+                format!("get_bool!(engine, {}, {})", node_id, property)
+            },
+            Some(Some(AbstractValue::Color(_))) => {
+                format!("get_color!(engine, {}, {})", node_id, property)
+            },
+            Some(Some(AbstractValue::Number(_))) => {
+                format!("get_number!(engine, {}, {})", node_id, property)
+            }
+            _ => {
+                panic!("Can't find property '{}.{}'.", node_id, property);
+            }
+        }
     }).to_string();
     
     result
