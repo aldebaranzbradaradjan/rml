@@ -46,8 +46,6 @@ pub fn rml(input: TokenStream) -> TokenStream {
         RmlParser::parse_with_path(input, "".to_string())
     }, transformed_input.clone()).unwrap();
 
-    println!("Parsed RML AST");
-
     let (mut parsed_node, components) = (res.root_node, res.components);
     
     let generated = parsed_node.generate_with_components_and_counter(&components, &mut 0, &properties_mapping);

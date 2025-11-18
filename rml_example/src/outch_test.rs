@@ -34,7 +34,7 @@ async fn main() {
         Node {
             id: root
             anchors: fill
-            text: "Please don't hit my button!"
+            string text: "Please don't hit my button!"
 
             signal click
 
@@ -45,13 +45,13 @@ async fn main() {
             Rectangle {
                 anchors: fill
                 margins: 10
-                color: { GRAY }
+                color color: { GRAY }
             }
             
             Text {
                 anchors: center
-                text: { $.root.text }
-                color: { WHITE }
+                string text: { $.root.text }
+                color color: { WHITE }
                 font_size: 16
             }
 

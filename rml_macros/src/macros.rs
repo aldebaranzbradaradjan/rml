@@ -87,48 +87,37 @@ pub fn property_parse(content: &ParseBuffer) -> Result<Value, syn::Error> {
         if content.peek(Ident) && content.peek2(Token![|]) {
             // handle composed values with |
             let mut composed_value = String::new();
-            while !content.peek(Token![|]) {
+            loop {
+                // parse identifier
                 let ident: Ident = content.parse()?;
                 composed_value.push_str(&ident.to_string());
-                composed_value.push_str("__");
-
+                // look ahead: if next is '|', consume it and continue
                 if content.peek(Token![|]) {
                     content.parse::<Token![|]>()?;
+                    composed_value.push_str("__");
+                    continue;
                 }
-                if content.peek(Token![;]) || content.peek(Token![,]) {
-                    break;
-                }
-                if content.peek(Ident) && content.peek2(Token![:]) {
-                    break;
-                }
-                if content.peek(Ident) && content.peek2(Token![.]) {
-                    break;
-                }
+                // otherwise stop the composed value
+                break;
             }
+            
             value = Value::Ident(Ident::new(&composed_value, Span::call_site()));
+            //println!("the content after : {}, composed value {}", content.to_string(), composed_value);
         } else {
             value = Value::Ident(content.parse()?);
         }
     } else if content.peek(syn::token::Brace) {
-        println!("Parsing block value");
-        println!("Content before parsing: {}", content.to_string());
-
         // Just try to parse the block directly and ignore any $ syntax errors for now
         match content.parse::<syn::Block>() {
             Ok(block) => {
-                println!("Parsed block directly");
                 value = Value::Block(block);
             }
             Err(_) => {
-                println!("Failed to parse block directly, creating dummy block, the content : {}", content.to_string());
+                warn!("Failed to parse block directly, creating dummy block");
                 // If parsing fails due to $ syntax, create a dummy block
                 value = Value::Ident(Ident::new("test", Span::call_site()));
             }
         }
-
-        println!("Parsed block value");
-        println!("Content after parsing: {}", content.to_string());
-
     } else {
         return Err(content.error("Expected literal, identifier or block"));
     }
@@ -179,8 +168,6 @@ impl RmlParser {
         
         // Parse the root node
         let root_node: RmlNode = input.parse()?;
-
-        println!("Finished parsing RmlParser");
 
         Ok(RmlParser {
             components,
@@ -233,6 +220,8 @@ impl Parse for RmlNode {
         let mut functions = Vec::new();
 
         while !content.is_empty() {
+            //println!("content : {:?}", content);
+
             if content.peek(Token![fn]) {
                 let item: syn::Item = content.parse()?;
                 if let syn::Item::Fn(func) = item {
@@ -268,17 +257,16 @@ impl Parse for RmlNode {
 
                             // parse signal declaration: signal identifier
                             content.parse::<Ident>()?; // consume "signal" string
-                            let fork = content.fork();
+                            //let fork = content.fork();
                             if let Ok(_key) = parse_property_key(&fork) {
                                 if fork.peek(Token![:]) {
                                     // assume it's a property
                                     let key = parse_property_key(&content)?;
                                     content.parse::<Token![:]>()?;
-                                    println!("Parsing property: {}", key.to_string());
                                     let value = property_parse(&content)?;
                                     content.parse::<Token![,]>().ok();
+                                    //println!("trying to parse a property, type {:?}, name {:?}", property_type, key.to_string());
                                     properties.push((property_type, key, value));
-                                    println!("Just parsed property");
                                     continue;
                                 }
                             }
@@ -295,11 +283,10 @@ impl Parse for RmlNode {
                         // assume it's a property
                         let key = parse_property_key(&content)?;
                         content.parse::<Token![:]>()?;
-                        println!("Parsing property: {}", key.to_string());
                         let value = property_parse(&content)?;
                         content.parse::<Token![,]>().ok();
+                        //println!("trying to parse a property, name {:?}",  key.to_string());
                         properties.push((PropertyType::Unknown, key, value));
-                        println!("Just parsed property");
                         continue;
                     }
                 }
@@ -314,8 +301,6 @@ impl Parse for RmlNode {
                 }
             }
         }
-
-        println!("Finished parsing RmlNode: {}", _ident);
 
         Ok(Self {
             _ident,
@@ -364,8 +349,6 @@ impl RmlNode {
                 *id_counter += 1;
                 n_id
             });
-
-        println!("real new id  {} and counter : {}", id, id_counter);
 
         let temp_node = format_ident!("temp_node_{}", id);
 
@@ -669,12 +652,6 @@ impl RmlNode {
             file_content
         };
 
-        println!("Custom component original id: {}, new id: {}", original_id, n_id);
-
-        // display properties_mapping and check if we have the n_id there
-        //println!("Custom component properties mapping: {:#?}", properties_mapping);
-        println!("Custom component properties mapping contains n_id: {}", properties_mapping.contains_key(&n_id));
-
         let file_content = transform_dollar_syntax(&file_content, properties_mapping);
         let tokens: proc_macro::TokenStream = file_content.parse().unwrap();
 
@@ -683,14 +660,6 @@ impl RmlNode {
         }, tokens.clone()).unwrap();
 
         let (mut component_node, components) = (res.root_node, res.components);
-
-        // let original_id: String = match component_node.properties.iter().find(|(k, _)| k.to_string() == "id".to_string()) {
-        //     Some(id) => id.1.to_string(),
-        //     None => String::from(""),
-        // };
-
-        // remove id property if exist
-        //component_node.properties.retain(|(k, _)| k.to_string() != "id".to_string());
 
         // Override the component's properties with the ones passed to this instance
         for (prop_type, prop_key, prop_value) in &self.properties {
@@ -740,7 +709,6 @@ impl RmlNode {
     }
 
     pub fn pre_generate_with_components_and_counter(&mut self, components: &HashMap<String, ComponentDefinition>, id_counter: &mut u32) -> HashMap<String, AbstractValue> {
-        println!("pre_generate_with_components");
         let node_type_str = self._ident.to_string();
 
         // Check if this is a custom component
@@ -767,8 +735,6 @@ impl RmlNode {
                 *id_counter += 1;
                 n_id
             });
-
-        println!("new id  {} and counter : {}", id, id_counter);
 
         // for each child, we need to merge the hashmap into a single one
         let mut merged_child_results: HashMap<String, AbstractValue> = HashMap::new();
@@ -866,8 +832,6 @@ impl RmlNode {
                 }
             }).collect();
 
-        //println!("Props : {:#?}", properties);
-
         properties.extend(merged_child_results);
 
         if properties.get(&format!("{}.x", id)).is_none() {
@@ -899,7 +863,6 @@ impl RmlNode {
     }
     
     fn pre_generate_custom_component_with_counter(&self, component_def: &ComponentDefinition, id_counter: &mut u32) -> HashMap<String, AbstractValue> {
-        println!("pre_generate_custom_component");
         // Read and parse the component file
         let file_content = fs::read_to_string(&component_def.path).unwrap();
         let tokens: proc_macro::TokenStream = file_content.parse().unwrap();
@@ -925,11 +888,6 @@ impl RmlNode {
             // Find if this property already exists in the component
             if let Some(existing_prop) = component_node.properties.iter_mut().find(|(_, k, _)| k.to_string() == prop_key.to_string()) {
                 existing_prop.2 = prop_value.clone();
-                // warning if property type is set in this instance
-                // if *prop_type != PropertyType::Unknown {
-                //     warn!("Property type defined in component cannot be overridden: {:#?} in {}", prop_key, component_def.name);
-                // }
-
                 if !matches!(prop_type, PropertyType::Unknown) {
                     warn!("Property type defined in component cannot be overridden: {:#?} in {}", prop_key, component_def.name);
                 }
