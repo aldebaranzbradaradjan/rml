@@ -742,48 +742,6 @@ impl RmlNode {
             merged_child_results.extend(self.children[i].pre_generate_with_components_and_counter(components, id_counter));
         }
 
-        // Generate the properties code
-        // We need to check if the property is a block with initializer, a callback or a value
-
-        // by typing the property system we can avoid some issues later
-        // we must impl sometthing like : 
-        /*
-        pub enum PropertyKey {
-            Simple(
-                type: Type,
-                base: Ident
-            ),
-            Composed {
-                type: AbstractValue,
-                base: Ident, 
-                field: Ident 
-            },
-            Signal(Ident),
-        }
-
-        and support syntaxe like this in parser :
-         let mut engine = rml!(
-        import "components" as Components
-
-        Node {
-            id: root
-            number width: 500.0
-            number height: 500.0
-
-            Components::Button {
-                id: counter_btn
-                anchors: center
-                number counter: 0
-                string text: { format!("Counter: {}", $.counter_btn.counter) }
-                on_click: { $.counter_btn.counter += 1.0; }
-                number val: 10.0
-            }
-        }
-    );
-
-    with special case id with type id and anchors
-        */
-
         let mut properties: HashMap<String, AbstractValue> = self
             .properties
             .iter()
@@ -798,27 +756,6 @@ impl RmlNode {
                 } else if k_string.starts_with("on_") {
                     (format!("{}.{}", id, k.to_string()), AbstractValue::Null)
                 } else {
-                    // let value = match v {
-
-                    //     // here use type to know what to put istead of null
-
-                    //     Value::Block(_block) => {
-                    //         let value_type= match t {
-                    //             PropertyType::Number => AbstractValue::Number(0.0),
-                    //             PropertyType::Bool => AbstractValue::Bool(false),
-                    //             PropertyType::String => AbstractValue::String("".to_string()),
-                    //             PropertyType::Color => AbstractValue::Color(RED),
-                    //             _ => AbstractValue::Null,
-                    //         };
-
-                    //         (format!("{}.{}", id, k.to_string()), value_type)
-                    //     }
-                    //     _ => {
-                    //         let value = value_to_abstract_value(v);
-                    //         (format!("{}.{}", id, k.to_string()), value)  
-                    //     }
-                    // };
-
                     let value_type= match t {
                         PropertyType::Number => AbstractValue::Number(0.0),
                         PropertyType::Bool => AbstractValue::Bool(false),

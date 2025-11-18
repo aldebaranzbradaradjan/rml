@@ -190,29 +190,68 @@ pub fn inject_engine_text_based(
     mutable: bool,
     functions: &Vec<String>,
 ) -> String {
-    let engine_str = if definition {
+    // prepare what we should inject OUTSIDE callback blocks
+    let injected_normal = if definition {
+        format!("&mut {engine_str}")
+    } else if mutable {
         format!("&mut {engine_str}")
     } else {
-        if mutable {
-            format!("&mut {engine_str}")
-        } else {
-            format!("{engine_str}")
-        }
+        format!("{engine_str}")
     };
+
+    // inside a callback block we always inject "engine"
+    let injected_callback = "engine".to_string();
 
     let mut output = String::new();
 
+    let mut in_callback = false;
+    let mut brace_depth: i32 = 0;
+
     for line in input.lines() {
         let mut modified_line = line.to_string();
-        for func in functions {
-            let pattern = format!("fn {func}(");
 
-            if line.contains(&pattern) {
-                // it's a function definition, we dont need to modify it, its already done in inject_engine_in_block
-            } else {
-                let pattern = format!("{func}(");
-                let replacement = format!("{func}({engine_str}");
-                modified_line = modified_line.replace(&pattern, &replacement);
+        // detect start of callback
+        if line.contains("engine.add_callback")
+            && line.contains("move | engine |")
+        {
+            in_callback = true;
+            // we expect an opening brace, but we count braces
+            // anyway to remain robust.
+            brace_depth += line.matches('{').count() as i32;
+            brace_depth -= line.matches('}').count() as i32;
+            output.push_str(&modified_line);
+            output.push('\n');
+            continue;
+        }
+
+        // If inside callback, keep track of braces to know when we exit
+        if in_callback {
+            brace_depth += line.matches('{').count() as i32;
+            brace_depth -= line.matches('}').count() as i32;
+            if brace_depth <= 0 {
+                in_callback = false;
+            }
+        }
+
+        for func in functions {
+            let def_pattern = format!("fn {func}(");
+
+            if line.contains(&def_pattern) {
+                // Function definition – skip
+                continue;
+            }
+
+            // Function call injection
+            let call_pattern = format!("{func}(");
+
+            if modified_line.contains(&call_pattern) {
+                let replacement = if in_callback {
+                    format!("{func}({injected_callback}")
+                } else {
+                    format!("{func}({injected_normal}")
+                };
+
+                modified_line = modified_line.replace(&call_pattern, &replacement);
             }
         }
 

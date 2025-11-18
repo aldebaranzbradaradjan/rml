@@ -53,7 +53,11 @@ async fn main() {
                 anchors: center
                 string text: { $.root.text }
                 color color: { WHITE }
-                font_size: 24
+                font_size: { test_returns_number() }
+
+                fn test_returns_number() -> u32 {
+                    24
+                }
             }
 
             UI::Button {
