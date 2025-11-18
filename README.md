@@ -24,6 +24,7 @@ let mut engine = rml!(
         id: root
         anchors: fill
         string text: "Please don't hit my button!"
+        color color: { DARKGRAY }
 
         signal click
 
@@ -39,9 +40,13 @@ let mut engine = rml!(
         
         Text {
             anchors: center
-            text: { $.root.text }
+            string text: { $.root.text }
             color color: { WHITE }
-            font_size: 16
+            font_size: { test_returns_number() }
+
+            fn test_returns_number() -> u32 {
+                24
+            }
         }
 
         UI::Button {
@@ -97,9 +102,9 @@ The parts listed below barely works for some.
 
 * Adding optionnal typing for properties, used to handle the $ syntax but may be forced in futur ✅
 
-## Planned Features / TODO (order by interest)
+* Better functions declaration (ability to return values) ✅
 
-* Better functions declaration (ability to return values)
+## Planned Features / TODO (order by interest)
 
 * Extend import logic (multiple imports per file, global import at root node)
 
@@ -116,6 +121,7 @@ The parts listed below barely works for some.
 * Data models:
     * ListModel, TableModel via declarative Rust macros
     * Support for field access, sorting, and filtering
+    * This will certainly need a way to access the data in the engine context
 
 * Rename to CML (Cute Markup Language) or RTML (Rustic Markup Language - Rust Toy Markup Language - Real Tiny Markup Language ? Real Time Markup Language ??)
 I'm considering renaming it to CML (Cute Markup Language) or RTML - a more playful alternative to RML, which could be misinterpreted as Rust Markup Language.
