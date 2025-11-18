@@ -13,7 +13,7 @@ use std::collections::HashMap;
 fn window_conf() -> Conf {
     Conf {
         window_title: "RML Component Test".to_owned(),
-        window_width: 300,
+        window_width: 400,
         window_height: 300,
         window_resizable: true,
         fullscreen: false,
@@ -35,6 +35,7 @@ async fn main() {
             id: root
             anchors: fill
             string text: "Please don't hit my button!"
+            color color: { DARKGRAY }
 
             signal click
 
@@ -52,7 +53,7 @@ async fn main() {
                 anchors: center
                 string text: { $.root.text }
                 color color: { WHITE }
-                font_size: 16
+                font_size: 24
             }
 
             UI::Button {

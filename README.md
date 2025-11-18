@@ -23,7 +23,7 @@ let mut engine = rml!(
     Node {
         id: root
         anchors: fill
-        text: "Please don't hit my button!"
+        string text: "Please don't hit my button!"
 
         signal click
 
@@ -34,13 +34,13 @@ let mut engine = rml!(
         Rectangle {
             anchors: fill
             margins: 10
-            color: { GRAY }
+            color color: { GRAY }
         }
         
         Text {
             anchors: center
             text: { $.root.text }
-            color: { WHITE }
+            color color: { WHITE }
             font_size: 16
         }
 
@@ -93,11 +93,13 @@ The parts listed below barely works for some.
 
 * Implement rapid setter / getter $ macro ( $.draggable.x = new_x; ) there is some limitations but it's a start ✅
 
+* Rework the rapid access syntax to get rid of the need for the $ and :f32 :string etc syntax ✅
+
+* Adding optionnal typing for properties, used to handle the $ syntax but may be forced in futur ✅
+
 ## Planned Features / TODO (order by interest)
 
 * Better functions declaration (ability to return values)
-
-* Rework the rapid access syntax to get rid of the need for the $ and :f32 :string etc syntax
 
 * Extend import logic (multiple imports per file, global import at root node)
 
