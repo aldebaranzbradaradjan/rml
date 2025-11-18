@@ -8,6 +8,10 @@ name = "main"
 path = "src/main.rs"
 
 [[bin]]
+name = "main_example"
+path = "src/main_example.rs"
+
+[[bin]]
 name = "mousearea"
 path = "src/mousearea_test.rs"
 

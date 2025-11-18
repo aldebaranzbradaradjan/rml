@@ -23,39 +23,54 @@ let mut engine = rml!(
     Node {
         id: root
         anchors: fill
-        string text: "Please don't hit my button!"
         color color: { DARKGRAY }
 
-        signal click
+        // A simple counter stored in the root node it's a typed property
+        number counter: 0
 
-        on_click: {
-            $.root.text = "outch!".to_string();
+        // A custom signal that can be emitted, internally it's a boolean property
+        signal clicked
+
+        on_clicked: {
+            // When the signal fires, increment the counter
+            $.root.counter = $.root.counter + 1.0; // numbers are f32
+            $.label.text = format!("Counter: {}", $.root.counter);
         }
 
+        // A function used inside UI properties
+        fn compute_font_size() -> u32 {
+            // Dynamic but constant here—just to demonstrate usage
+            18 + 6
+        }
+
+        // Background panel
         Rectangle {
             anchors: fill
-            margins: 10
-            color color: { GRAY }
-        }
-        
-        Text {
-            anchors: center
-            string text: { $.root.text }
-            color color: { WHITE }
-            font_size: { test_returns_number() }
-
-            fn test_returns_number() -> u32 {
-                24
+            margins: 20
+            color color: {
+                // color shifts slightly as counter increases
+                Color::new(0.5, ($.root.counter/20.0), 0.5, 1.0)
             }
         }
 
+        // Text label
+        Text {
+            id: label
+            anchors: center
+            string text: { format!("Counter: {}", $.root.counter) }
+            color color: { WHITE }
+            number font_size: { compute_font_size() }
+        }
+
+        // Button
         UI::Button {
-            id: test_btn
             anchors: center | bottom
-            margins: 20
-            text: "Click me!"
+            margins: 30
+            text: "Increment!"
+
             on_click: {
-                emit!(engine, root, click);
+                // Emit a signal handled by the root node
+                emit!(engine, root, clicked);
             }
         }
     }
@@ -63,7 +78,7 @@ let mut engine = rml!(
 ```
 
 ## Result example  (main example)
-![example result](example.png)
+![example result](record_main_example.webm)
 
 ## Current Status: Unstable
 This project is under active experimentation.
