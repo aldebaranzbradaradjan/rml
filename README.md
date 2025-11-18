@@ -78,7 +78,7 @@ let mut engine = rml!(
 ```
 
 ## Result example  (main example)
-![example result](record_main_example.webm)
+![example result](record_example.gif)
 
 ## Current Status: Unstable
 This project is under active experimentation.
