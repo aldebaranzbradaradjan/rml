@@ -179,8 +179,8 @@ fn parse_anchors(anchor_string: &str) -> Vec<Anchor> {
 fn get_parent_size(engine: &RmlEngine, node_id: &str) -> (f32, f32) {
     match engine.get_parent_by_id(node_id) {
         Some(parent) => {
-            let width = engine.get_number_property_of_node(&parent.id, "width", 0.0);
-            let height = engine.get_number_property_of_node(&parent.id, "height", 0.0);
+            let width = engine.get_number_property_of_node(&parent.id, "computed_width", 0.0);
+            let height = engine.get_number_property_of_node(&parent.id, "computed_height", 0.0);
             (width, height)
         }
         None => (0.0, 0.0),
@@ -283,6 +283,10 @@ pub fn draw_root(engine: &mut RmlEngine) {
         engine.set_property_of_node(&root_node, "y", crate::AbstractValue::Number(y));
         engine.set_property_of_node(&root_node, "width", crate::AbstractValue::Number(width));
         engine.set_property_of_node(&root_node, "height", crate::AbstractValue::Number(height));
+        engine.set_property_of_node(&root_node, "computed_x", crate::AbstractValue::Number(x));
+        engine.set_property_of_node(&root_node, "computed_y", crate::AbstractValue::Number(y));
+        engine.set_property_of_node(&root_node, "computed_width", crate::AbstractValue::Number(width));
+        engine.set_property_of_node(&root_node, "computed_height", crate::AbstractValue::Number(height));
 
         let color = engine.get_color_property_of_node(&root_node, "color", RED);
         draw_rectangle(x, y, width, height, color);

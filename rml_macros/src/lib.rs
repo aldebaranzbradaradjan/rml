@@ -27,8 +27,7 @@ pub fn rml(input: TokenStream) -> TokenStream {
     let (mut parsed_node, components) = (res.root_node, res.components);
     let properties_mapping = parsed_node.pre_generate_with_components_and_counter(&components, &mut 0);
 
-    println!("Res : {:#?}", properties_mapping);
-
+    // println!("Res : {:#?}", properties_mapping);
     // we have the struct of the application, and can infer property type, and use it in transform_dollar_syntax
 
     // transform the input to replace $ syntax before parsing

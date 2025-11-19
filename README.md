@@ -18,6 +18,7 @@ Not intended for production use — just have fun!
 ## Example
 ```rust
 
+// This example demonstrates how to use the RML library to create a simple 2D GUI
 use rml_core::prelude::*;
 use rml_macros::rml;
 
@@ -81,8 +82,15 @@ async fn main() {
                     // color shifts slightly as counter increases
                     Color::new(0.52, 0.0, ($.root.counter/20.0).min(1.0), 1.0)
                 }
-            }
 
+                // Wow such a beautiful texture
+                Texture {
+                    id: background_texture
+                    anchors: fill
+                    margins: 20
+                    source: "Adriaen"
+                }
+            }
             // Text label
             Text {
                 id: label
@@ -122,6 +130,10 @@ async fn main() {
         .await
         .unwrap();
     engine.add_font("liberation".to_string(), font);
+
+    // We add a texture to use in the RML
+    let texture = load_texture("./Adriaen_van_Ostade_006.png").await.unwrap();
+    engine.add_texture("Adriaen".to_string(), texture);
 
     loop {
         engine.process_events();
