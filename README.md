@@ -179,9 +179,9 @@ The parts listed below barely works for some.
 
 ## Planned Features / TODO (order by interest)
 
-* Extend import logic (multiple imports per file, global import at root node)
+* Allow instantiate components in node at runtime (big work esxpected), will allow thing like Repeater
 
-* Add an Image node type
+* Add a Texture node type
 
 * Add tests
 
@@ -193,6 +193,8 @@ The parts listed below barely works for some.
     * ListModel, TableModel via declarative Rust macros
     * Support for field access, sorting, and filtering
     * This will certainly need a way to access the data in the engine context
+
+* Extend import logic (multiple imports per file, global import at root node)
 
 * Rename to CML (Cute Markup Language) or RTML (Rustic Markup Language - Rust Toy Markup Language - Real Tiny Markup Language ? Real Time Markup Language ??)
 I'm considering renaming it to CML (Cute Markup Language) or RTML - a more playful alternative to RML, which could be misinterpreted as Rust Markup Language.
