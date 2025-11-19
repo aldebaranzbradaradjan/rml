@@ -191,6 +191,14 @@ pub fn darker_color(color: Color, amount: f32) -> Color {
     color
 }
 
+pub fn invert_color(color: Color, amount: f32) -> Color {
+    let mut color = color;
+    color.r = 1.0 - color.r * amount;
+    color.g = 1.0 - color.g * amount;
+    color.b = 1.0 - color.b * amount;
+    color
+}
+
 pub fn decompose_color_string(color_string: &str) -> Color {
     //"rgba(0.4, 0.9, 0.7, 1.0)"
     // remove rgba( and )
@@ -218,6 +226,8 @@ pub struct RmlEngine {
     event_manager: EventManager,
     pub current_event: Option<SystemEvent>,
     pub current_event_consumed: bool,
+
+    fonts: HashMap<String, macroquad::prelude::Font>,
 }
 
 impl RmlEngine {
@@ -231,6 +241,7 @@ impl RmlEngine {
             event_manager: EventManager::new(),
             current_event: None,
             current_event_consumed: false,
+            fonts: HashMap::new(),
         }
     }
 
@@ -746,6 +757,14 @@ impl RmlEngine {
         self.event_manager.get_mouse_position()
     }
 
+    pub fn add_font(&mut self, name: String, font: macroquad::text::Font) {
+        self.fonts.insert(name, font);
+    }
+
+    pub fn get_font(&self, name: &str) -> Option<&macroquad::text::Font> {
+        self.fonts.get(name)
+    }
+
 }
 
 pub mod prelude {
@@ -767,6 +786,7 @@ pub mod prelude {
         set_color,
         darker_color,
         lighter_color,
+        invert_color,
         emit,
         EventType,
         ItemTypeEnum,

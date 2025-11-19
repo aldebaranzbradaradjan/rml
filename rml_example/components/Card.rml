@@ -7,6 +7,7 @@ Rectangle {
 
     string content: "Card content goes here"
     title: "Card Title"
+    string font: ""
     
     Text {
         id: card_title
@@ -14,7 +15,8 @@ Rectangle {
         margins: 10
         text: { get_string!(engine, root_info_card, title) }
         color color: { Color::new(0.0, 0.0, 0.0, 1.0) }
-        font_size: 18
+        font_size: 20
+        string font: { $.root_info_card.font }
     }
     
     Text {
@@ -22,7 +24,8 @@ Rectangle {
         anchors: center
         text: { get_string!(engine, root_info_card, content) }
         color color: { Color::new(0.3, 0.3, 0.3, 1.0) }
-        font_size: 14
+        font_size: 16
         width: { get_number!(engine, root_info_card, width) - 20. }
+        string font: { $.root_info_card.font }
     }
 }

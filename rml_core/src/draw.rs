@@ -102,9 +102,10 @@ impl Geometry {
             if node.node_type == ItemTypeEnum::Text {
                 let text = engine.get_string_property_of_node(node_id, "text", String::new());
                 let font_size = engine.get_number_property_of_node(node_id, "font_size", 20.0);
+                let wanted_font = engine.get_string_property_of_node(node_id, "font", String::new());
                 
                 // mesure the text dimensions
-                let text_dimensions = measure_text(&text, None, font_size as u16, 1.0);
+                let text_dimensions = measure_text(&text, engine.get_font(&wanted_font), font_size as u16, 1.0);
                 if geometry.width == 0.0 {
                     geometry.width = text_dimensions.width;
                 }
@@ -221,7 +222,7 @@ fn draw_text_with_wrap(text: &str, x: f32, y: f32, max_width: f32, text_params: 
     if max_width <= 0.0 {
         // if there is no max width, just draw the text at the specified position
         // adding the baseline offset to the y position because macroquad's draw_text_ex uses the baseline offset
-        let text_dims = measure_text(&text, None, font_size as u16, 1.0);
+        let text_dims = measure_text(&text, text_params.font, font_size as u16, 1.0);
         let baseline_offset = text_dims.offset_y; // macroquad fournit cet offset
         let adjusted_y = y + baseline_offset;
         draw_text_ex(text, x, adjusted_y, text_params.clone());
@@ -241,7 +242,7 @@ fn draw_text_with_wrap(text: &str, x: f32, y: f32, max_width: f32, text_params: 
             format!("{} {}", current_line, word)
         };
         
-        let test_width = measure_text(&test_line, None, text_params.font_size, 1.0).width;
+        let test_width = measure_text(&test_line, text_params.font, text_params.font_size, 1.0).width;
         
         if test_width <= max_width {
             current_line = test_line;
@@ -263,7 +264,7 @@ fn draw_text_with_wrap(text: &str, x: f32, y: f32, max_width: f32, text_params: 
     
     // draw each line with the adjusted y position
     for (i, line) in lines.iter().enumerate() {
-        let text_dims = measure_text(&text, None, font_size as u16, 1.0);
+        let text_dims = measure_text(&text, text_params.font, font_size as u16, 1.0);
         let baseline_offset = text_dims.offset_y; // macroquad fournit cet offset
         let adjusted_y = y + baseline_offset + (i as f32 * line_height);
         draw_text_ex(line, x, adjusted_y, text_params.clone());
@@ -321,18 +322,22 @@ pub fn draw_childs(engine: &mut RmlEngine, node_id: &str, parent_pos: (f32, f32)
                 let text = engine.get_string_property_of_node(node_id, "text", String::new());
                 let color = engine.get_color_property_of_node(node_id, "color", WHITE);
                 let font_size = engine.get_number_property_of_node(node_id, "font_size", 20.0);
+                let wanted_font = engine.get_string_property_of_node(node_id, "font", String::new());
+                let max_width = engine.get_number_property_of_node(node_id, "max_width", 100000.0);
 
-                let text_dimensions = measure_text(&text, None, font_size as u16, 1.0);
+                let text_dimensions = measure_text(&text, engine.get_font(&wanted_font), font_size as u16, 1.0);
                 engine.set_property_of_node(node_id, "implicit_width", text_dimensions.width.into());
                 engine.set_property_of_node(node_id, "implicit_height", text_dimensions.height.into());
                 
                 let text_params = TextParams {
+                    font: engine.get_font(&wanted_font),
                     font_size: font_size as u16,
+                    font_scale: 1.0,
                     color,
                     ..Default::default()
                 };
-
-                draw_text_with_wrap(&text, x, y, width, &text_params);
+                let minimal_width = if max_width < width { max_width } else { width };
+                draw_text_with_wrap(&text, x, y, minimal_width, &text_params);
             }
             ItemTypeEnum::MouseArea => {
                 // MouseArea is invisible by default, but can have a debug color

@@ -41,10 +41,6 @@ async fn main() {
 
     //println!("node from macro:\n {:#?}", engine.get_arena());
 
-    let font = load_ttf_font("/usr/local/share/fonts/d/DOMINICA.ttf")
-        .await
-        .unwrap();
-
     loop {
         engine.process_events();
         clear_background(BLACK);

@@ -1,12 +1,13 @@
 
 Rectangle {
     id: root_btn_template
-    number width: 150
+    number width: 160
     number height: 40
     string text: "Button"
     color base_color: { Color::new(0.3, 0.8, 0.6, 1.0) }
     bool hovered: false
     bool pushed: false
+    string font: ""
 
     color color: {
         let mut color = $.root_btn_template.base_color;
@@ -19,9 +20,11 @@ Rectangle {
     
     Text {
         anchors: center
+        max_width: { $.root_btn_template.width }
         text: { $.root_btn_template.text }
+        string font: { $.root_btn_template.font }
         color color: { WHITE }
-        number font_size: 24
+        number font_size: 16
     }
     
     MouseArea {

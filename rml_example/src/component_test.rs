@@ -13,6 +13,7 @@ fn window_conf() -> Conf {
         window_height: 400,
         window_resizable: true,
         fullscreen: false,
+        high_dpi: true,
         platform: miniquad::conf::Platform {
             linux_backend: miniquad::conf::LinuxBackend::WaylandOnly,
             ..Default::default()
@@ -38,6 +39,7 @@ async fn main() {
                 anchors: top | left
                 margins: 20
                 text: "Click Me !"
+                font: "liberation"
                 on_click: {
                     println!("Main button clicked!");
                     $.info_card.content = "Main button clicked! (with unique ID) - see console output for more info about the event".to_string();
@@ -48,6 +50,7 @@ async fn main() {
                 anchors: top | right
                 margins: 20
                 text: "Click Me 2 !"
+                font: "liberation"
                 on_click: {
                     println!("Second button clicked!");
                     $.info_card.content = "Second button clicked! (with unique ID) - see console output for more info about the event".to_string();
@@ -60,6 +63,7 @@ async fn main() {
                 anchors: bottom | left
                 margins: 20
                 text: { "Click Me" }
+                font: "liberation"
                 number count: 0
                 on_click: {
                     println!("Third button clicked!");
@@ -82,14 +86,22 @@ async fn main() {
             UI::Card {
                 id: info_card
                 anchors: center
+                width: 400
+                height: 150
                 title: "Welcome"
+                font: "liberation"
                 string content: "Multiple buttons test - each should have unique IDs!"
             }
         }
     );
 
     println!("RML Component Test initialized");
-    println!("node from macro:\n {:#?}", engine.get_arena());
+    //println!("node from macro:\n {:#?}", engine.get_arena());
+
+    let font = load_ttf_font("./LiberationSerif-Regular.ttf")
+        .await
+        .unwrap();
+    engine.add_font("liberation".to_string(), font);
 
     loop {
         engine.process_events();
