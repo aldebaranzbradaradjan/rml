@@ -228,6 +228,7 @@ pub struct RmlEngine {
     pub current_event_consumed: bool,
 
     fonts: HashMap<String, macroquad::prelude::Font>,
+    textures: HashMap<String, macroquad::prelude::Texture2D>,
 }
 
 impl RmlEngine {
@@ -242,6 +243,7 @@ impl RmlEngine {
             current_event: None,
             current_event_consumed: false,
             fonts: HashMap::new(),
+            textures: HashMap::new(),
         }
     }
 
@@ -258,8 +260,6 @@ impl RmlEngine {
         self.arena.add_node(node_type, id, properties)
     }
 
-/*************  ✨ Windsurf Command ⭐  *************/
-/*******  9d5b49fe-cba0-4937-875a-31cbd6f6947c  *******/
     pub fn add_child(&mut self, parent_id: NodeId, child_id: NodeId) {
         self.arena.add_child(parent_id, child_id);
     }
@@ -763,6 +763,14 @@ impl RmlEngine {
 
     pub fn get_font(&self, name: &str) -> Option<&macroquad::text::Font> {
         self.fonts.get(name)
+    }
+
+    pub fn add_texture(&mut self, name: String, texture: macroquad::texture::Texture2D) {
+        self.textures.insert(name, texture);
+    }
+
+    pub fn get_texture(&self, name: &str) -> Option<&macroquad::texture::Texture2D> {
+        self.textures.get(name)
     }
 
 }

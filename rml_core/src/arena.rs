@@ -22,6 +22,7 @@ pub enum ItemTypeEnum {
     Rectangle,
     Text,
     MouseArea,
+    Texture,
 }
 
 pub type ArenaNodeId = String;
@@ -67,6 +68,7 @@ impl ToTokens for ItemTypeEnum {
             ItemTypeEnum::Rectangle => quote! { ItemTypeEnum::Rectangle },
             ItemTypeEnum::Text => quote! { ItemTypeEnum::Text },
             ItemTypeEnum::MouseArea => quote! { ItemTypeEnum::MouseArea },
+            ItemTypeEnum::Texture => quote! { ItemTypeEnum::Texture },
         };
         tokenized.to_tokens(tokens);
     }

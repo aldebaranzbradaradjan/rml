@@ -348,6 +348,21 @@ pub fn draw_childs(engine: &mut RmlEngine, node_id: &str, parent_pos: (f32, f32)
                     draw_rectangle(x, y, width, height, debug_color);
                 }
             }
+            ItemTypeEnum::Texture => {
+                let texture_name = engine.get_string_property_of_node(node_id, "source", String::new());
+                if let Some(texture) = engine.get_texture(&texture_name) {
+                    draw_texture_ex(
+                        texture,
+                        x,
+                        y,
+                        WHITE,
+                        DrawTextureParams {
+                            dest_size: Some(Vec2::new(width, height)),
+                            ..Default::default()
+                        },
+                    );
+                }
+            }
             _ => {} // Node type and others
         }
 

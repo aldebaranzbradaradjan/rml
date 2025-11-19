@@ -25,9 +25,15 @@ async fn main() {
 
         Node {
             id: root
-            number width: 500.0
-            number height: 500.0
+            anchors: fill
             color color: { DARKGRAY }
+
+            Texture {
+                id: background_texture
+                anchors: fill
+                margins: 10
+                source: "Adriaen"
+            }
 
             Components::Button {
                 id: counter_btn
@@ -35,11 +41,21 @@ async fn main() {
                 number counter: 0
                 text: { format!("Counter: {}", $.counter_btn.counter) }
                 on_click: { $.counter_btn.counter += 1.0; }
+                font: "liberation"
             }
         }
     );
 
-    //println!("node from macro:\n {:#?}", engine.get_arena());
+    
+    let font = load_ttf_font("./LiberationSerif-Regular.ttf")
+        .await
+        .unwrap();
+    engine.add_font("liberation".to_string(), font);
+
+    let texture = load_texture("./Adriaen_van_Ostade_006.png").await.unwrap();
+
+    engine.add_texture("Adriaen".to_string(), texture);
+
 
     loop {
         engine.process_events();

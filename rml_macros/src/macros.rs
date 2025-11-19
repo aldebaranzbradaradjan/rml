@@ -363,6 +363,7 @@ impl RmlNode {
             "Rectangle" => ItemTypeEnum::Rectangle,
             "Text" => ItemTypeEnum::Text,
             "MouseArea" => ItemTypeEnum::MouseArea,
+            "Texture" => ItemTypeEnum::Texture,
             _ => panic!("Unknown node type: {}", node_type_str),
         };
         

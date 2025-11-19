@@ -177,11 +177,11 @@ The parts listed below barely works for some.
 
 * Better text node (with font support) ✅
 
+* Add a Texture node type (only png) ✅
+
 ## Planned Features / TODO (order by interest)
 
 * Allow instantiate components in node at runtime (big work esxpected), will allow thing like Repeater
-
-* Add a Texture node type
 
 * Add tests
 
