@@ -2,7 +2,7 @@
 A lightweight QML-like toolkit written in Rust
 
 ## Version
-0.1.1
+0.1.3
 
 ## About
 RML is a simple DSL for creating 2D GUIs in Rust.
