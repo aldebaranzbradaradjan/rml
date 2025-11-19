@@ -27,6 +27,7 @@ async fn main() {
             id: root
             number width: 500.0
             number height: 500.0
+            color color: { DARKGRAY }
 
             Components::Button {
                 id: counter_btn
@@ -40,10 +41,14 @@ async fn main() {
 
     //println!("node from macro:\n {:#?}", engine.get_arena());
 
+    let font = load_ttf_font("/usr/local/share/fonts/d/DOMINICA.ttf")
+        .await
+        .unwrap();
+
     loop {
         engine.process_events();
         clear_background(BLACK);
-        rml_core::draw::draw_childs(&mut engine, "root", (0., 0.));
+        rml_core::draw::draw_root(&mut engine);
         next_frame().await
     }
 }
