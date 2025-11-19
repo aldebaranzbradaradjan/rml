@@ -3,9 +3,9 @@ Rectangle {
 
     width: 200
     height: 150
-    color: "rgba(0.9, 0.9, 0.9, 1.0)"
+    color color: { Color::new(0.9, 0.9, 0.9, 1.0) }
 
-    content: "Card content goes here"
+    string content: "Card content goes here"
     title: "Card Title"
     
     Text {
@@ -13,7 +13,7 @@ Rectangle {
         anchors: top | horizontal_center
         margins: 10
         text: { get_string!(engine, root_info_card, title) }
-        color: "rgba(0.0, 0.0, 0.0, 1.0)"
+        color color: { Color::new(0.0, 0.0, 0.0, 1.0) }
         font_size: 18
     }
     
@@ -21,7 +21,7 @@ Rectangle {
         id: card_content
         anchors: center
         text: { get_string!(engine, root_info_card, content) }
-        color: "rgba(0.3, 0.3, 0.3, 1.0)"
+        color color: { Color::new(0.3, 0.3, 0.3, 1.0) }
         font_size: 14
         width: { get_number!(engine, root_info_card, width) - 20. }
     }

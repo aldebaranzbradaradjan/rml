@@ -36,14 +36,14 @@ async fn main() {
                 width: 300
                 height: 100
 
-                color: "rgba(0.9, 0.9, 0.9, 1.0)"
-                counter: 0
+                color color: { Color::new(0.9, 0.9, 0.9, 1.0) }
+                number counter: 0
                 
                 Text {
                     id: counter_text
                     anchors: center
                     text: { $.counter_display.counter }
-                    color: "rgba(0.0, 0.0, 0.0, 1.0)"
+                    color color: { BLACK }
                     font_size: 24
                 }
             }
@@ -54,12 +54,12 @@ async fn main() {
                 margins: 50
                 width: 120
                 height: 40
-                color: "rgba(0.3, 0.8, 0.6, 1.0)"
+                color color: { Color::new(0.3, 0.8, 0.6, 1.0) }
                 
                 Text {
                     anchors: center
                     text: "Increment"
-                    color: "rgba(1.0, 1.0, 1.0, 1.0)"
+                    color color: { WHITE }
                     font_size: 14
                 }
                 
@@ -80,12 +80,12 @@ async fn main() {
                 margins: 50
                 width: 120
                 height: 40
-                color: { Color::new(0.8, 0.3, 0.3, 1.0) }
+                color color: { Color::new(0.8, 0.3, 0.3, 1.0) }
                 
                 Text {
                     anchors: center
                     text: "Decrement"
-                    color: { WHITE }
+                    color color: { WHITE }
                     font_size: 14
                 }
                 
@@ -105,12 +105,12 @@ async fn main() {
                 margins: 50
                 width: 100
                 height: 40
-                color: "rgba(0.5, 0.5, 0.5, 1.0)"
+                color color: { Color::new(0.5, 0.5, 0.5, 1.0) }
                 
                 Text {
                     anchors: center
                     text: "Reset"
-                    color: "rgba(1.0, 1.0, 1.0, 1.0)"
+                    color color: { WHITE }
                     font_size: 14
                 }
                 
@@ -130,7 +130,7 @@ async fn main() {
                 anchors: top | horizontal_center
                 margins: 20
                 text: "Click buttons to test $ syntax - check console for debug output"
-                color: "rgba(0.2, 0.2, 0.2, 1.0)"
+                color color: { Color::new(0.2, 0.2, 0.2, 1.0) }
                 font_size: 14
             }
         }

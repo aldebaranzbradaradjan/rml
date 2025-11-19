@@ -35,6 +35,109 @@ pub fn format_code(code: &str) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
+// pub fn transform_dollar_syntax(code: &str, properties_mapping: &HashMap<String, AbstractValue>) -> String {
+//     use regex::Regex;
+    
+//     // Only transform if there are actually $ expressions
+//     if !code.contains("$.") {
+//         return code.to_string();
+//     }
+    
+//     let mut result = code.to_string();
+    
+//     // Handle compound assignments first: $.node.prop += value; ([+\-*/])=
+//     let compound_assign_pattern = Regex::new(r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*([+\-*/])=\s*([^;]+)\s*;").unwrap();
+//     result = compound_assign_pattern.replace_all(&result, |caps: &regex::Captures| {
+//         let node_id = &caps[1];
+//         let property = &caps[2];
+//         let operator = &caps[3];
+//         let value = &caps[4].trim();
+
+//         // check if property is in the mapping
+//         // format!("{}.{}", node_id, property)
+//         let abstract_value = properties_mapping.get(&format!("{}.{}", node_id, property));
+
+//         match Some(abstract_value) {
+//             Some(Some(AbstractValue::String(_))) => {
+//                 if operator != "+" {
+//                     panic!("Invalid operator '{}' for string property '{}.{}'. Only '+=' is allowed for strings.", operator, node_id, property);
+//                 }
+//                 format!("set_string!(engine, {}, {}, format!(\"{{}}{{}}\", get_string!(engine, {}, {}), {}));", 
+//                     node_id, property, node_id, property, value)
+//             },
+//             Some(Some(AbstractValue::Bool(_))) => {
+//                 panic!("Compound assignments are not supported for boolean properties '{}.{}'.", node_id, property);
+//             },
+//             Some(Some(AbstractValue::Color(_))) => {
+//                 panic!("Compound assignments are not supported for color properties '{}.{}'.", node_id, property);
+//             },
+//             Some(Some(AbstractValue::Number(_))) => {
+//                 format!("set_number!(engine, {}, {}, get_number!(engine, {}, {}) {} {});", 
+//                     node_id, property, node_id, property, operator, value)
+//             }
+//             _ => {
+//                 panic!("Can't find property '{}.{}'.", node_id, property);
+//             }
+//         }
+//     }).to_string();
+    
+//     // Handle simple assignments: $.node.prop = value;
+//     let assign_pattern = Regex::new(r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([^;]+)\s*;").unwrap();
+//     result = assign_pattern.replace_all(&result, |caps: &regex::Captures| {
+//         let node_id = &caps[1];
+//         let property = &caps[2];
+//         let value = &caps[3].trim();
+
+//         let abstract_value = properties_mapping.get(&format!("{}.{}", node_id, property));
+//         match Some(abstract_value) {
+//             Some(Some(AbstractValue::String(_))) => {
+//                 format!("set_string!(engine, {}, {}, {});", node_id, property, value)
+//             },
+//             Some(Some(AbstractValue::Bool(_))) => {
+//                 format!("set_bool!(engine, {}, {}, {});", node_id, property, value)
+//             },
+//             Some(Some(AbstractValue::Color(_))) => {
+//                 format!("set_color!(engine, {}, {}, {});", node_id, property, value)
+//             },
+//             Some(Some(AbstractValue::Number(_))) => {
+//                 format!("set_number!(engine, {}, {}, {});", node_id, property, value)
+//             }
+//             _ => {
+//                 panic!("Can't find property '{}.{}'.", node_id, property);
+//             }
+//         }
+//     }).to_string();
+    
+//     // Handle regular read operations: $.node.prop (in expressions)
+//     // Be more careful to only match standalone expressions, not inside strings
+//     let dollar_pattern = Regex::new(r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\b").unwrap();
+//     result = dollar_pattern.replace_all(&result, |caps: &regex::Captures| {
+//         let node_id = &caps[1];
+//         let property = &caps[2];
+        
+//         let abstract_value = properties_mapping.get(&format!("{}.{}", node_id, property));
+//         match Some(abstract_value) {
+//             Some(Some(AbstractValue::String(_))) => {
+//                 format!("get_string!(engine, {}, {})", node_id, property)
+//             },
+//             Some(Some(AbstractValue::Bool(_))) => {
+//                 format!("get_bool!(engine, {}, {})", node_id, property)
+//             },
+//             Some(Some(AbstractValue::Color(_))) => {
+//                 format!("get_color!(engine, {}, {})", node_id, property)
+//             },
+//             Some(Some(AbstractValue::Number(_))) => {
+//                 format!("get_number!(engine, {}, {})", node_id, property)
+//             }
+//             _ => {
+//                 panic!("Can't find property '{}.{}'.", node_id, property);
+//             }
+//         }
+//     }).to_string();
+    
+//     result
+// }
+
 pub fn transform_dollar_syntax(code: &str, properties_mapping: &HashMap<String, AbstractValue>) -> String {
     use regex::Regex;
     
@@ -53,8 +156,6 @@ pub fn transform_dollar_syntax(code: &str, properties_mapping: &HashMap<String, 
         let operator = &caps[3];
         let value = &caps[4].trim();
 
-        // check if property is in the mapping
-        // format!("{}.{}", node_id, property)
         let abstract_value = properties_mapping.get(&format!("{}.{}", node_id, property));
 
         match Some(abstract_value) {
@@ -82,7 +183,8 @@ pub fn transform_dollar_syntax(code: &str, properties_mapping: &HashMap<String, 
     }).to_string();
     
     // Handle simple assignments: $.node.prop = value;
-    let assign_pattern = Regex::new(r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([^;]+)\s*;").unwrap();
+    // Match = but not ==, !=, <=, >=, +=, -=, *=, /=
+    let assign_pattern = Regex::new(r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([^=;][^;]*)\s*;").unwrap();
     result = assign_pattern.replace_all(&result, |caps: &regex::Captures| {
         let node_id = &caps[1];
         let property = &caps[2];
@@ -106,52 +208,7 @@ pub fn transform_dollar_syntax(code: &str, properties_mapping: &HashMap<String, 
                 panic!("Can't find property '{}.{}'.", node_id, property);
             }
         }
-        
-        // // Try to determine the type based on the value
-        // if value.starts_with('"') || value.contains(".to_string()") || value.contains("String::") {
-        //     format!("set_string!(engine, {}, {}, {});", node_id, property, value)
-        // } else if *value == "true" || *value == "false" {
-        //     format!("set_bool!(engine, {}, {}, {});", node_id, property, value)
-        // } else {
-        //     format!("set_number!(engine, {}, {}, {});", node_id, property, value)
-        // }
     }).to_string();
-    
-    // // Handle typed read operations first: $.node.prop:type
-    // let typed_pattern = Regex::new(r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*):([a-zA-Z0-9_]+)\b").unwrap();
-    // result = typed_pattern.replace_all(&result, |caps: &regex::Captures| {
-    //     let node_id = &caps[1];
-    //     let property = &caps[2];
-    //     let type_hint = &caps[3];
-        
-    //     // match type_hint {
-    //     //     "f32" | "number" => format!("get_number!(engine, {}, {})", node_id, property),
-    //     //     "string" | "str" => format!("get_string!(engine, {}, {})", node_id, property),
-    //     //     "bool" => format!("get_bool!(engine, {}, {})", node_id, property),
-    //     //     "color" => format!("get_color!(engine, {}, {})", node_id, property),
-    //     //     _ => format!("get_value!(engine, {}, {})", node_id, property),
-    //     // }
-
-    //     let abstract_value = properties_mapping.get(&format!("{}.{}", node_id, property));
-    //     match Some(abstract_value) {
-    //         Some(Some(AbstractValue::String(_))) => {
-    //             format!("get_string!(engine, {}, {});", node_id, property)
-    //         },
-    //         Some(Some(AbstractValue::Bool(_))) => {
-    //             format!("get_bool!(engine, {}, {});", node_id, property)
-    //         },
-    //         Some(Some(AbstractValue::Color(_))) => {
-    //             format!("get_color!(engine, {}, {});", node_id, property)
-    //         },
-    //         Some(Some(AbstractValue::Number(_))) => {
-    //             format!("get_number!(engine, {}, {});", node_id, property)
-    //         }
-    //         _ => {
-    //             panic!("Can't find property '{}.{}'.", node_id, property);
-    //         }
-    //     }
-
-    // }).to_string();
     
     // Handle regular read operations: $.node.prop (in expressions)
     // Be more careful to only match standalone expressions, not inside strings
@@ -181,6 +238,164 @@ pub fn transform_dollar_syntax(code: &str, properties_mapping: &HashMap<String, 
     }).to_string();
     
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use rml_core::prelude::DARKGRAY;
+
+    use super::*;
+    use std::collections::HashMap;
+
+    fn mapping() -> HashMap<String, AbstractValue> {
+        use AbstractValue::*;
+        let mut m = HashMap::new();
+        m.insert("node.str".into(), String("".into()));
+        m.insert("node.num".into(), Number(0.0));
+        m.insert("node.bool".into(), Bool(false));
+        m.insert("node.color".into(), Color(DARKGRAY));
+        m
+    }
+
+    // ---------------------------------------------------
+    // 1. SIMPLE ASSIGNMENTS
+    // ---------------------------------------------------
+    #[test]
+    fn test_simple_assignment_number() {
+        let code = "$.node.num = 5;";
+        let result = transform_dollar_syntax(code, &mapping());
+        assert_eq!(result, "set_number!(engine, node, num, 5);");
+    }
+
+    #[test]
+    fn test_simple_assignment_string() {
+        let code = "$.node.str = \"hello\";";
+        let result = transform_dollar_syntax(code, &mapping());
+        assert_eq!(result, "set_string!(engine, node, str, \"hello\");");
+    }
+
+    #[test]
+    fn test_simple_assignment_bool() {
+        let code = "$.node.bool = true;";
+        let result = transform_dollar_syntax(code, &mapping());
+        assert_eq!(result, "set_bool!(engine, node, bool, true);");
+    }
+
+    #[test]
+    fn test_simple_assignment_color() {
+        let code = "$.node.color = red;";
+        let result = transform_dollar_syntax(code, &mapping());
+        assert_eq!(result, "set_color!(engine, node, color, red);");
+    }
+
+    // ---------------------------------------------------
+    // 2. COMPARISONS (==) SHOULD NOT BE TRANSFORMED
+    // ---------------------------------------------------
+    #[test]
+    fn test_comparison_not_transformed() {
+        let code = "if ($.node.num == 3) {}";
+        let result = transform_dollar_syntax(code, &mapping());
+        assert_eq!(result, "if (get_number!(engine, node, num) == 3) {}");
+    }
+
+    #[test]
+    fn test_comparison_with_strings_not_transformed() {
+        let code = "if ($.node.str == \"ok\") {}";
+        let result = transform_dollar_syntax(code, &mapping());
+        assert_eq!(result, "if (get_string!(engine, node, str) == \"ok\") {}");
+    }
+
+    // ---------------------------------------------------
+    // 3. COMPOUND ASSIGNMENTS
+    // ---------------------------------------------------
+    #[test]
+    fn test_compound_plus_number() {
+        let code = "$.node.num += 2;";
+        let result = transform_dollar_syntax(code, &mapping());
+        assert_eq!(
+            result,
+            "set_number!(engine, node, num, get_number!(engine, node, num) + 2);"
+        );
+    }
+
+    #[test]
+    fn test_compound_plus_string() {
+        let code = "$.node.str += \" world\";";
+        let result = transform_dollar_syntax(code, &mapping());
+        assert_eq!(
+            result,
+            "set_string!(engine, node, str, format!(\"{}{}\", get_string!(engine, node, str), \" world\"));"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid operator '-' for string property")]
+    fn test_compound_wrong_operator_string() {
+        transform_dollar_syntax("$.node.str -= \"bad\";", &mapping());
+    }
+
+    #[test]
+    #[should_panic(expected = "Compound assignments are not supported for boolean properties")]
+    fn test_compound_bool_invalid() {
+        transform_dollar_syntax("$.node.bool += true;", &mapping());
+    }
+
+    // ---------------------------------------------------
+    // 4. READ OPERATIONS
+    // ---------------------------------------------------
+    #[test]
+    fn test_read_number() {
+        let code = "x = $.node.num + 1;";
+        let result = transform_dollar_syntax(code, &mapping());
+        assert_eq!(
+            result,
+            "x = get_number!(engine, node, num) + 1;"
+        );
+    }
+
+    #[test]
+    fn test_read_string() {
+        let code = "print($.node.str);";
+        let result = transform_dollar_syntax(code, &mapping());
+        assert_eq!(
+            result,
+            "print(get_string!(engine, node, str));"
+        );
+    }
+
+    #[test]
+    fn test_read_multiple() {
+        let code = "$.node.num + $.node.num * $.node.num";
+        let result = transform_dollar_syntax(code, &mapping());
+        assert_eq!(
+            result,
+            "get_number!(engine, node, num) + get_number!(engine, node, num) * get_number!(engine, node, num)"
+        );
+    }
+
+    // ---------------------------------------------------
+    // 5. UNKNOWN PROPERTY
+    // ---------------------------------------------------
+    #[test]
+    #[should_panic(expected = "Can't find property")]
+    fn test_unknown_property() {
+        transform_dollar_syntax("$.x.y = 10;", &mapping());
+    }
+
+    // ---------------------------------------------------
+    // 5. UNKNOWN PROPERTY
+    // ---------------------------------------------------
+    #[test]
+    fn test_real_01_property() {
+
+        let code = "fn compute_font_size() { if $.node.num == 0.0 { $.node.str = \"Click Me\".to_string(); } }";
+        let result = transform_dollar_syntax(code, &mapping());
+        println!("Result: {}", result);
+        assert_eq!(
+            result,
+            "fn compute_font_size() { if get_number!(engine, node, num) == 0.0 { set_string!(engine, node, str, \"Click Me\".to_string()); } }"
+        );
+    }
 }
 
 pub fn inject_engine_text_based(

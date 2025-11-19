@@ -13,3 +13,4 @@ syn = { version = "2.0", features = ["full"] }
 proc-macro2 = "1.0"
 uuid = { version = "1.11.0", features = ["v4"] }
 regex = "1.0"
+base64 = "0.22.1"

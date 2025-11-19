@@ -1,4 +1,5 @@
 
+use proc_macro2::extra::DelimSpan;
 use proc_macro2::Span;
 use quote::{format_ident, quote};
 use rml_core::prelude::{info, warn, RED};
@@ -10,6 +11,8 @@ use std::collections::HashMap;
 use std::fs;
 use regex::Regex;
 use std::path::Path;
+
+use syn::Stmt::Item;
 
 use crate::structs::*;
 use crate::format::*;
@@ -223,7 +226,35 @@ impl Parse for RmlNode {
             //println!("content : {:?}", content);
 
             if content.peek(Token![fn]) {
-                let item: syn::Item = content.parse()?;
+                //let item: syn::Item = content.parse()?;
+                let item: syn::Item = match content.parse::<syn::Item>() {
+                    Ok(block) => block,
+                    Err(_) => {
+                        warn!("Failed to parse Fn block directly, creating dummy block");
+
+                        syn::Item::Fn(syn::ItemFn {
+                            attrs: Vec::new(),
+                            vis: syn::Visibility::Inherited,
+                            sig: syn::Signature {
+                                constness: None,
+                                asyncness: None,
+                                unsafety: None,
+                                abi: None,
+                                ident: Ident::new("dummy_function", Span::call_site()),
+                                generics: Default::default(),
+                                inputs: Default::default(),
+                                output: syn::ReturnType::Default,
+                                variadic: None,
+                                fn_token: syn::token::Fn { span: Span::call_site() },
+                                paren_token: syn::token::Paren::default(),
+                            },
+                            block: Box::new(syn::Block {
+                                brace_token: syn::token::Brace::default(),
+                                stmts: Vec::new(),
+                            }),
+                        })
+                    }
+                };
                 if let syn::Item::Fn(func) = item {
                     functions.push(func);
                 } else {
@@ -349,6 +380,8 @@ impl RmlNode {
                 *id_counter += 1;
                 n_id
             });
+
+        println!("Generating node of type '{}' with id '{}'", node_type_str, id);
 
         let temp_node = format_ident!("temp_node_{}", id);
 
@@ -633,9 +666,6 @@ impl RmlNode {
             .unwrap_or("");
 
 
-        let n_id = format!("generated_id_{}", id_counter);
-        *id_counter += 1;
-
         // maybe there is id property in self.properties, so we need to use that instead
         let n_id = self.properties.iter().find_map(|(t, k, v)| {
             if k.to_string() == "id" { 
@@ -643,8 +673,11 @@ impl RmlNode {
             } else { 
                 None 
             }
-        }).unwrap_or_else(|| n_id);
-
+        }).unwrap_or_else(|| {
+            let n_id = format!("generated_id_{}", id_counter);
+            *id_counter += 1;
+            n_id
+        });
 
         let file_content = if !original_id.is_empty() {
             file_content.replace(original_id, &n_id)
@@ -709,6 +742,7 @@ impl RmlNode {
     }
 
     pub fn pre_generate_with_components_and_counter(&mut self, components: &HashMap<String, ComponentDefinition>, id_counter: &mut u32) -> HashMap<String, AbstractValue> {
+        
         let node_type_str = self._ident.to_string();
 
         // Check if this is a custom component
@@ -735,6 +769,8 @@ impl RmlNode {
                 *id_counter += 1;
                 n_id
             });
+
+        println!("Pre-generating node of type: {} with id: {}", self._ident, id);
 
         // for each child, we need to merge the hashmap into a single one
         let mut merged_child_results: HashMap<String, AbstractValue> = HashMap::new();

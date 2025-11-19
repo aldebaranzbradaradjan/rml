@@ -33,7 +33,7 @@ async fn main() {
             // Background
             Rectangle {
                 anchors: fill
-                color: "rgba(0.1, 0.1, 0.2, 1.0)"
+                color color: { Color::new(0.1, 0.1, 0.2, 1.0) }
             }
 
             // Combined scroll area - Both directions
@@ -43,12 +43,12 @@ async fn main() {
                 margins: 20.0
                 width: 300.0
                 height: 150.0
-                color: "rgba(0.6, 0.8, 0.3, 1.0)"
+                color color: { Color::new(0.6, 0.8, 0.3, 1.0) }
 
                 Text {
                     x: 20.0
                     y: 30.0
-                    color: "rgba(0.0, 0.0, 0.0, 1.0)"
+                    color color: { Color::new(0.0, 0.0, 0.0, 1.0) }
                     text: "Combined Scroll Area"
                     font_size: 20
                 }
@@ -57,7 +57,7 @@ async fn main() {
                     id: c_scroll_info
                     x: 20.0
                     y: 60.0
-                    color: "rgba(0.0, 0.0, 0.0, 1.0)"
+                    color color: { Color::new(0.0, 0.0, 0.0, 1.0) }
                     text: "Both directions affect size"
                     font_size: 15
                 }
@@ -100,11 +100,11 @@ async fn main() {
                 margins: 20.0
                 width: 120.0
                 height: 40.0
-                color: "rgba(0.8, 0.3, 0.3, 1.0)"
+                color color: { Color::new(0.8, 0.3, 0.3, 1.0) }
 
                 Text {
                     anchors: center
-                    color: "rgba(1.0, 1.0, 1.0, 1.0)"
+                    color color: { Color::new(1.0, 1.0, 1.0, 1.0) }
                     text: "Reset Size"
                     font_size: 18
                 }
@@ -142,13 +142,13 @@ async fn main() {
                 y: 100.0
                 width: 80.0
                 height: 80.0
-                color: "rgba(0.3, 0.8, 0.6, 1.0)"
+                color color: { Color::new(0.3, 0.8, 0.6, 1.0) }
                 is_dragging: false
 
                 Text {
                     id: drag_text
                     anchors: center
-                    color: "rgba(0.0, 0.0, 0.0, 1.0)"
+                    color color: { Color::new(0.0, 0.0, 0.0, 1.0) }
                     text: "Drag"
                     font_size: 15
                 }
@@ -181,9 +181,11 @@ async fn main() {
                             set_number!(engine, draggable, x, new_x);
                             set_number!(engine, draggable, y, new_y);
 
-                            // todo add this syntax to rml_macros
+                            // t0do add this syntax to rml_macros
                             // $.draggable.x = new_x;
                             // $.draggable.y = new_y;
+                            // response to this t0do :
+                            // it's implemented now, but we will keep this code for reference
                         }
                     }
 
@@ -204,13 +206,13 @@ async fn main() {
                 margins: 20.0
                 width: 300.0
                 height: 200.0
-                color: "rgba(0.2, 0.3, 0.8, 1.0)"
+                color color: { Color::new(0.2, 0.3, 0.8, 1.0) }
 
                 Text {
                     id: test_key_text
                     x: 20.0
                     y: 30.0
-                    color: "rgba(1.0, 1.0, 1.0, 1.0)"
+                    color color: { Color::new(1.0, 1.0, 1.0, 1.0) }
                     text: "Container for Key Events"
                     font_size: 20
                 }
