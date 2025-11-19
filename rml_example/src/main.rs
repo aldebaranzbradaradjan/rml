@@ -38,7 +38,7 @@ async fn main() {
         }
     );
 
-    println!("node from macro:\n {:#?}", engine.get_arena());
+    //println!("node from macro:\n {:#?}", engine.get_arena());
 
     loop {
         engine.process_events();

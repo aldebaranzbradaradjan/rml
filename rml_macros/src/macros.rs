@@ -1,18 +1,14 @@
 
-use proc_macro2::extra::DelimSpan;
 use proc_macro2::Span;
 use quote::{format_ident, quote};
-use rml_core::prelude::{info, warn, RED};
+use rml_core::prelude::{warn, RED};
 use syn::parse::{Parse, ParseBuffer, ParseStream};
 use syn::{Ident, Lit, Token, Expr, ExprPath, Member, LitStr};
-use uuid::Uuid;
-use rml_core::{AbstractValue, ItemTypeEnum, PropertyName};
+use rml_core::{AbstractValue, ItemTypeEnum};
 use std::collections::HashMap;
 use std::fs;
 use regex::Regex;
 use std::path::Path;
-
-use syn::Stmt::Item;
 
 use crate::structs::*;
 use crate::format::*;
@@ -82,7 +78,7 @@ pub fn parse_property_key(input: ParseStream) -> syn::Result<PropertyKey> {
     }
 }
 
-pub fn property_parse(content: &ParseBuffer) -> Result<Value, syn::Error> {
+pub fn property_parse(content: &ParseBuffer, pre_parse: bool) -> Result<Value, syn::Error> {
     let value: Value;
     if content.peek(Lit) {
         value = Value::Lit(content.parse()?);
@@ -116,7 +112,7 @@ pub fn property_parse(content: &ParseBuffer) -> Result<Value, syn::Error> {
                 value = Value::Block(block);
             }
             Err(_) => {
-                warn!("Failed to parse block directly, creating dummy block");
+                if !pre_parse { warn!("Failed to parse block directly, creating dummy block"); }
                 // If parsing fails due to $ syntax, create a dummy block
                 value = Value::Ident(Ident::new("test", Span::call_site()));
             }
@@ -133,7 +129,7 @@ impl RmlParser {
         RmlParser { components: HashMap::new(), root_node: RmlNode { _ident: "".to_string(), properties: Vec::new(), children: Vec::new(), functions: Vec::new() } }
     }
 
-    pub fn parse_with_path(input: ParseStream, parent_path: String) -> syn::Result<Self> {
+    pub fn parse_with_path(input: ParseStream, parent_path: String, pre_parse: bool) -> syn::Result<Self> {
         let mut components = HashMap::new();
         // Parse imports first
         while input.peek(Ident) && input.peek2(LitStr) {
@@ -170,7 +166,7 @@ impl RmlParser {
         }
         
         // Parse the root node
-        let root_node: RmlNode = input.parse()?;
+        let root_node = RmlNode::parse_with_flag(input, pre_parse)?;
 
         Ok(RmlParser {
             components,
@@ -205,7 +201,13 @@ impl Parse for ImportStatement {
 
 impl Parse for RmlNode {
     fn parse(input: ParseStream) -> syn::Result<Self> {
+        // Parse par défaut sans pre_parse
+        Self::parse_with_flag(input, false)
+    }
+}
 
+impl RmlNode {
+    pub fn parse_with_flag(input: ParseStream, pre_parse: bool) -> syn::Result<Self> {
         // node name can be a sigle Ident or Ident . Ident
         let _ident: Ident = input.parse()?;
         let mut _ident = _ident.to_string();    
@@ -230,7 +232,7 @@ impl Parse for RmlNode {
                 let item: syn::Item = match content.parse::<syn::Item>() {
                     Ok(block) => block,
                     Err(_) => {
-                        warn!("Failed to parse Fn block directly, creating dummy block");
+                        if !pre_parse { warn!("Failed to parse Fn block directly, creating dummy block"); }
 
                         syn::Item::Fn(syn::ItemFn {
                             attrs: Vec::new(),
@@ -294,7 +296,7 @@ impl Parse for RmlNode {
                                     // assume it's a property
                                     let key = parse_property_key(&content)?;
                                     content.parse::<Token![:]>()?;
-                                    let value = property_parse(&content)?;
+                                    let value = property_parse(&content, pre_parse)?;
                                     content.parse::<Token![,]>().ok();
                                     //println!("trying to parse a property, type {:?}, name {:?}", property_type, key.to_string());
                                     properties.push((property_type, key, value));
@@ -314,7 +316,7 @@ impl Parse for RmlNode {
                         // assume it's a property
                         let key = parse_property_key(&content)?;
                         content.parse::<Token![:]>()?;
-                        let value = property_parse(&content)?;
+                        let value = property_parse(&content, pre_parse)?;
                         content.parse::<Token![,]>().ok();
                         //println!("trying to parse a property, name {:?}",  key.to_string());
                         properties.push((PropertyType::Unknown, key, value));
@@ -324,7 +326,7 @@ impl Parse for RmlNode {
                 
                 // if we are here, it's not a property; try to parse a child node
                 if content.peek(Ident) {
-                    let child: RmlNode = content.parse()?;
+                    let child: RmlNode = RmlNode::parse_with_flag(&content, pre_parse)?;
                     functions.extend(child.functions.clone());
                     children.push(child);
                 } else {
@@ -368,7 +370,7 @@ impl RmlNode {
         let id = self
             .properties
             .iter()
-            .find_map(|(t, k, v)| {
+            .find_map(|(_t, k, v)| {
                 if k.to_string() == "id" { 
                     Some(v.to_string()) 
                 } else { 
@@ -381,7 +383,7 @@ impl RmlNode {
                 n_id
             });
 
-        println!("Generating node of type '{}' with id '{}'", node_type_str, id);
+        //println!("Generating node of type '{}' with id '{}'", node_type_str, id);
 
         let temp_node = format_ident!("temp_node_{}", id);
 
@@ -413,7 +415,7 @@ impl RmlNode {
         let initializer: Vec<proc_macro2::TokenStream> = self
             .properties
             .iter()
-            .map(|(t, k, v)| {
+            .map(|(_t, k, v)| {
                 let k_string = k.to_string();
                 let k_ident = k.to_ident();
                 
@@ -512,7 +514,7 @@ impl RmlNode {
         let properties: Vec<proc_macro2::TokenStream> = self
             .properties
             .iter()
-            .map(|(t, k, v)| {
+            .map(|(_t, k, v)| {
                 let k_string = k.to_string();
                 let k_ident = k.to_ident();
                 
@@ -667,7 +669,7 @@ impl RmlNode {
 
 
         // maybe there is id property in self.properties, so we need to use that instead
-        let n_id = self.properties.iter().find_map(|(t, k, v)| {
+        let n_id = self.properties.iter().find_map(|(_t, k, v)| {
             if k.to_string() == "id" { 
                 Some(v.to_string()) 
             } else { 
@@ -689,7 +691,7 @@ impl RmlNode {
         let tokens: proc_macro::TokenStream = file_content.parse().unwrap();
 
         let res= syn::parse::Parser::parse(|input: ParseStream| {
-          RmlParser::parse_with_path(input, component_def.path.clone())
+          RmlParser::parse_with_path(input, component_def.path.clone(), false)
         }, tokens.clone()).unwrap();
 
         let (mut component_node, components) = (res.root_node, res.components);
@@ -757,7 +759,7 @@ impl RmlNode {
         let id: String = self
             .properties
             .iter()
-            .find_map(|(t, k, v)| {
+            .find_map(|(_t, k, v)| {
                 if k.to_string() == "id" { 
                     Some(v.to_string()) 
                 } else { 
@@ -770,7 +772,7 @@ impl RmlNode {
                 n_id
             });
 
-        println!("Pre-generating node of type: {} with id: {}", self._ident, id);
+        //println!("Pre-generating node of type: {} with id: {}", self._ident, id);
 
         // for each child, we need to merge the hashmap into a single one
         let mut merged_child_results: HashMap<String, AbstractValue> = HashMap::new();
@@ -781,7 +783,7 @@ impl RmlNode {
         let mut properties: HashMap<String, AbstractValue> = self
             .properties
             .iter()
-            .map(|(t, k, v)| {
+            .map(|(t, k, _v)| {
                 let k_string = k.to_string();
                 
                 // Handle signal declarations
@@ -842,7 +844,7 @@ impl RmlNode {
 
         let mut res = RmlParser::empty();
         match syn::parse::Parser::parse(|input: ParseStream| {
-            res = RmlParser::parse_with_path(input, component_def.path.clone()).unwrap();
+            res = RmlParser::parse_with_path(input, component_def.path.clone(), true).unwrap();
             Ok(RmlParser::empty())
         }, tokens.clone()) {
             Ok(r) => r,

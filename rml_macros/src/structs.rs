@@ -68,9 +68,9 @@ pub enum Value {
 impl Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Value::Lit(lit) => write!(f, "Lit()"),
+            Value::Lit(_lit) => write!(f, "Lit()"),
             Value::Ident(ident) => write!(f, "Ident({})", ident),
-            Value::Block(block) => write!(f, "Block()"),
+            Value::Block(_block) => write!(f, "Block()"),
         }
     }
 }

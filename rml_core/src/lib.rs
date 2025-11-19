@@ -10,7 +10,7 @@ pub use properties::{AbstractValue, Property};
 pub use events::{SystemEvent, EventType, EventManager};
 
 use std::{collections::{HashMap}, sync::{Arc}};
-use macroquad::{color::Color, prelude::info};
+use macroquad::{color::Color};
 
 pub type CallbackId = usize;
 pub type PropertyId = usize;
