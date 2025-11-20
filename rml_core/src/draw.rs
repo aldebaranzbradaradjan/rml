@@ -1,3 +1,5 @@
+use std::arch::x86_64;
+
 use macroquad::prelude::*;
 use crate::{RmlEngine, ItemTypeEnum};
 
@@ -271,6 +273,18 @@ fn draw_text_with_wrap(text: &str, x: f32, y: f32, max_width: f32, text_params: 
     }
 }
 
+pub fn draw_round_rect(x: f32, y: f32, w: f32, h: f32, r: f32, color: Color) {
+    // rectangle central
+    draw_rectangle(x + r, y, w - 2.0*r, h, color);
+    draw_rectangle(x, y + r, w, h - 2.0*r, color);
+
+    // 4 coins arrondis (cercles)
+    draw_circle(x + r,     y + r,     r, color);
+    draw_circle(x + w - r, y + r,     r, color);
+    draw_circle(x + r,     y + h - r, r, color);
+    draw_circle(x + w - r, y + h - r, r, color);
+}
+
 pub fn draw_root(engine: &mut RmlEngine) {
     // draw the root node,
     // then draw chils
@@ -320,7 +334,12 @@ pub fn draw_childs(engine: &mut RmlEngine, node_id: &str, parent_pos: (f32, f32)
         match node_type {
             ItemTypeEnum::Rectangle => {
                 let color = engine.get_color_property_of_node(node_id, "color", WHITE);
-                draw_rectangle(x, y, width, height, color);
+                let radius = engine.get_number_property_of_node(node_id, "radius", 0.0);
+                if radius > 0.0 {
+                    draw_round_rect(x, y, width, height, radius, color);
+                } else {
+                    draw_rectangle(x, y, width, height, color);
+                }
             }
             ItemTypeEnum::Text => {
                 let text = engine.get_string_property_of_node(node_id, "text", String::new());
@@ -354,6 +373,16 @@ pub fn draw_childs(engine: &mut RmlEngine, node_id: &str, parent_pos: (f32, f32)
             }
             ItemTypeEnum::Texture => {
                 let texture_name = engine.get_string_property_of_node(node_id, "source", String::new());
+                let keep_aspect_ratio = engine.get_bool_property_of_node(node_id, "keep_aspect_ratio", false);
+                let mut w = width; let mut h = height;
+                let mut x = x; let mut y = y;
+                if keep_aspect_ratio {
+                    w = w.min(h);
+                    h = w;
+                    // center the texture in the allocated area
+                    x = x + (width - w) / 2.0;
+                    y = y + (height - h) / 2.0;
+                }
                 if let Some(texture) = engine.get_texture(&texture_name) {
                     draw_texture_ex(
                         texture,
@@ -361,7 +390,7 @@ pub fn draw_childs(engine: &mut RmlEngine, node_id: &str, parent_pos: (f32, f32)
                         y,
                         WHITE,
                         DrawTextureParams {
-                            dest_size: Some(Vec2::new(width, height)),
+                            dest_size: Some(Vec2::new(w, h)),
                             ..Default::default()
                         },
                     );

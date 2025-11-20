@@ -123,7 +123,6 @@ pub fn property_parse(content: &ParseBuffer, pre_parse: bool) -> Result<Value, s
     Ok(value)
 }
 
-
 impl RmlParser {
     pub fn empty() -> RmlParser {
         RmlParser { components: HashMap::new(), root_node: RmlNode { _ident: "".to_string(), properties: Vec::new(), children: Vec::new(), functions: Vec::new() } }
@@ -176,6 +175,12 @@ impl RmlParser {
 }
 
 
+impl Parse for RmlParser {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        Self::parse_with_path(input, "".to_string(), false)
+    }
+}
+
 impl Parse for ImportStatement {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         // Parse "import" as an identifier
@@ -205,6 +210,53 @@ impl Parse for RmlNode {
         Self::parse_with_flag(input, false)
     }
 }
+
+// fn consume_function(tokens: &proc_macro::TokenStream) -> syn::Result<syn::Item> {
+//     // Buffer permet de parcourir les tokens sans parsing strict
+//     let buffer = Buffer::new(tokens.clone());
+//     let mut cursor = buffer.begin();
+
+//     // On consomme le mot-clé `fn`
+//     cursor = cursor.skip(); // fn
+//     cursor = cursor.skip(); // ident
+//     cursor = cursor.skip(); // parenthèses (...), syn gère ça automatiquement
+
+//     // Maintenant on cherche le bloc `{ ... }`
+//     let mut depth = 0;
+
+//     loop {
+//         if cursor.eof() {
+//             break; // sécurité
+//         }
+
+//         if let Some((tt, next)) = cursor.token_tree() {
+//             match tt {
+//                 proc_macro2::TokenTree::Group(g) if g.delimiter() == proc_macro2::Delimiter::Brace => {
+//                     // Si c’est un bloc, on le consomme d’un coup
+//                     depth += 1;
+//                     cursor = next;
+
+//                     // Avancer jusqu’à la fin du bloc — syn::Group contient déjà tous les tokens !
+//                     // On saute l’intégralité du group
+//                     cursor = cursor.skip(); 
+//                     depth -= 1;
+
+//                     if depth == 0 {
+//                         break; // On a fini de consommer `{ ... }`
+//                     }
+//                 }
+//                 _ => cursor = next,
+//             }
+//         } else {
+//             break;
+//         }
+//     }
+
+//     // Retourner un dummy propre
+//     Ok(syn::parse_quote! {
+//         fn dummy_function() {}
+//     })
+// }
 
 impl RmlNode {
     pub fn parse_with_flag(input: ParseStream, pre_parse: bool) -> syn::Result<Self> {
@@ -257,6 +309,14 @@ impl RmlNode {
                         })
                     }
                 };
+
+                // let item: syn::Item = if pre_parse {
+                //     consume_function(&content)?
+                // }
+                // else {
+                //     content.parse::<syn::Item>()?
+                // };
+
                 if let syn::Item::Fn(func) = item {
                     functions.push(func);
                 } else {

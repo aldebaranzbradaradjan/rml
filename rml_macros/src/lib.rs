@@ -11,7 +11,6 @@ use format::*;
 #[proc_macro]
 pub fn rml(input: TokenStream) -> TokenStream {
     // First parse
-    //let transformed_input: TokenStream = input_string.parse().unwrap();
     let mut res = RmlParser::empty();
     match syn::parse::Parser::parse(|input: ParseStream| {
         res = RmlParser::parse_with_path(input, "".to_string(), true).unwrap();
@@ -20,6 +19,23 @@ pub fn rml(input: TokenStream) -> TokenStream {
         Ok(r) => r,
         Err(_e) => { RmlParser::empty() }
     };
+
+    // let res = syn::parse::Parser::parse(|input: ParseStream| {
+    //     RmlParser::parse_with_path(input, "".to_string(), true)
+    // }, input.clone()).unwrap_or(RmlParser::empty());
+
+    //let input_clone = input.clone();
+
+    // let res = syn::parse::Parser::parse(|input: ParseStream| {
+    //     let result = RmlParser::parse_with_path(input, "".to_string(), true)?;
+    //     eprintln!("Parsing succeeded! Empty: {}", input.is_empty());
+    //     Ok(result)
+    // }, input).unwrap_or_else(|e| {
+    //     eprintln!("Parse failed: {}", e);
+    //     RmlParser::empty()
+    // });
+
+    println!("Res : {:#?}", res);
 
     // now we need equivalent process to parsed_node.generate_with_components(&components);
     // but only to develop children components, and be sure to use a deterministic way to rename items (a global counter should do the tricks)
@@ -31,15 +47,15 @@ pub fn rml(input: TokenStream) -> TokenStream {
     // we have the struct of the application, and can infer property type, and use it in transform_dollar_syntax
 
     // transform the input to replace $ syntax before parsing
-    let input_string = input.clone().to_string();
+    let input_string = input.to_string();
     let input_string = transform_dollar_syntax(&input_string, &properties_mapping);
 
     //println!("Transformed input: {}", input_string);
     
     // Parse the transformed input
     let transformed_input: TokenStream = input_string.parse().unwrap();
-    let res = syn::parse::Parser::parse(|input: ParseStream| {
-        RmlParser::parse_with_path(input, "".to_string(), false)
+    let res = syn::parse::Parser::parse(|transformed_input: ParseStream| {
+        RmlParser::parse_with_path(transformed_input, "".to_string(), false)
     }, transformed_input.clone()).unwrap();
 
     let (mut parsed_node, components) = (res.root_node, res.components);

@@ -8,6 +8,7 @@ Rectangle {
     bool hovered: false
     bool pushed: false
     string font: ""
+    number radius: 10
 
     color color: {
         let mut color = $.root_btn_template.base_color;

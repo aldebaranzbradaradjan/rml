@@ -33,6 +33,7 @@ async fn main() {
                 anchors: fill
                 margins: 10
                 source: "Adriaen"
+                keep_aspect_ratio: true
             }
 
             Components::Button {
@@ -53,7 +54,6 @@ async fn main() {
     engine.add_font("liberation".to_string(), font);
 
     let texture = load_texture("./Adriaen_van_Ostade_006.png").await.unwrap();
-
     engine.add_texture("Adriaen".to_string(), texture);
 
 

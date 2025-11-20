@@ -103,6 +103,8 @@ async fn main() {
         .unwrap();
     engine.add_font("liberation".to_string(), font);
 
+    set_default_filter_mode(FilterMode::Linear);
+
     loop {
         engine.process_events();
         clear_background(DARKGRAY);

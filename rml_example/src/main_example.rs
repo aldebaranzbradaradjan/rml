@@ -69,6 +69,8 @@ async fn main() {
                     anchors: fill
                     margins: 20
                     source: "Adriaen"
+                    keep_aspect_ratio: true
+                    // if not the texture will be stretched to fill the area
                 }
             }
             // Text label
@@ -114,6 +116,8 @@ async fn main() {
     // We add a texture to use in the RML
     let texture = load_texture("./Adriaen_van_Ostade_006.png").await.unwrap();
     engine.add_texture("Adriaen".to_string(), texture);
+
+    set_default_filter_mode(FilterMode::Nearest);
 
     loop {
         engine.process_events();
