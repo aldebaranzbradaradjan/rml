@@ -621,6 +621,12 @@ impl RmlNode {
                 }
             };
 
+            // todo create delete functions
+            // one to delete a specific item by id
+            // one to delete all items
+            // this function must delete in cascade the targeted items
+            // todo add a function to remove all bindings and callbacks associated to none
+
             let mut tmp_fn_vec = Vec::new();
             tmp_fn_vec.push(repeater_create_function);
             //tmp_fn_vec.push(repeater_delete_function);
@@ -712,7 +718,16 @@ impl RmlNode {
                 // it's an initializer
                 else if k_string.starts_with("on_ready") {
                     let value = match v {
-                        Value::Block(block) => {
+                        Value::Block(oblock) => {
+                            let block_string = format!("{}", quote! { #oblock });
+                            let block;
+                            if !parent_is_repeater {                   
+                                // replace dollar_this and dollar_parent usage in the block
+                                println!("Transforming block string for node id '{}', parent id '{}'", id, parent_id);
+                                let block_string = transform_dollar_this_parent_syntax(&id, &parent_id, &block_string, properties_mapping);
+                                block = syn::parse_str::<syn::Block>(&block_string).unwrap();
+                            }
+                            else { block = oblock.clone(); }
                             quote! {
                                 // this code will be executed in the initializer stage
                                 #block
@@ -991,11 +1006,6 @@ impl RmlNode {
             .and_then(|caps| caps.get(1))
             .map(|m| m.as_str())
             .unwrap_or("");
-
-
-        // TODO : if we have multiples levels of components, we need to be sure that the *id_counter += 1; is done only once per component instance
-        // we do ping pong between generate_with_components_and_counter and component generate_custom_component_with_counter 
-        // in the case of nested components, so the id_counter is incremented multiple times for the same component instance
 
         // maybe there is id property in self.properties, so we need to use that instead
         let n_id = self.properties.iter().find_map(|(_t, k, v)| {

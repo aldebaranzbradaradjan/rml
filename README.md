@@ -195,9 +195,20 @@ The parts listed below barely works for some.
 
 * Add a Texture node type (only png) ✅
 
+* Minimal implementation of Repeater ✅
+
+* Implement $.this and $.this.parent notations ✅
+
 ## Planned Features / TODO (order by interest)
 
-* Allow instantiate components in node at runtime (big work esxpected), will allow thing like Repeater
+* Continue Repeater (add delete items, allow the node in a repeater to be listed as children of the repeater parent)
+
+* Implement a child access system ($.this.children_count, $.this.children[i].computed_y)
+
+* Add the ability to bind a property to a callback at runtime
+    Like qml Qt.binding : $.this.children[i].top_margin = Rml.binding(fn() { return $.this.margins; })
+    That will set the property and setup and register a callback that will be evaluated when the detected property changes
+    Like actual callback in initializer but at runtime. All other callback related to this property must be deleted.
 
 * Add tests
 

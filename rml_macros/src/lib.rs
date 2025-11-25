@@ -8,6 +8,7 @@ mod format;
 mod macros;
 use format::*;
 
+#[cfg(not(rust_analyzer))]
 #[proc_macro]
 pub fn rml(input: TokenStream) -> TokenStream {
     // First parse

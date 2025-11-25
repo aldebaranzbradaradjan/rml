@@ -1,0 +1,25 @@
+
+Node {
+    on_ready: { initItems(); }
+
+    fn initItems() {
+        if $.this.children_count == 0.0 { return; }
+        let mut prev_y = 0.0;
+
+        for i in 0 .. $.this.children_count as u32 {
+            $.this.children[i].anchors = horizontal_center | top;
+            $.this.children[i].top_margin = prev_y;
+            if i > 0 {
+                prev_height = $.this.children[i].computed_y;
+            }
+        }
+    }
+
+    // todo
+    // to make it works, we need to be able to acces children_count and children array from RML
+    // so we need to convert this notation in a similar way as $.node.prop
+    // $.this.children_count can be a normal property that is setted when items are added (or deleted)
+    // but $.this.children[i].prop need to be translated to a function that will get or set the child at index i property
+    // also, we could generate binding to re-evaluate property when a binding is detected in the value
+    // like qml Qt.binding : $.this.children[i].top_margin = Rml.binding(fn() { return $.this.children[i].computed_y; })
+}

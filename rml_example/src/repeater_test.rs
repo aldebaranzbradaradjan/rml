@@ -37,7 +37,7 @@ async fn main() {
                 anchors: fill
 
                 on_ready: {
-                    let count = $.repeater_example.item_count as u32;
+                    let count = $.this.item_count as u32;
                     for i in 0 .. count {
                         repeater_example_create_item(&mut engine, i);
                     }
@@ -55,6 +55,16 @@ async fn main() {
                         println!("This button index: {}", $.this.index);
                     }
                 }
+
+                // todo
+                // the basic idea works, but repeated items are in the repeater node
+                // we need to place them in the parent of the repeater
+                // or maybe, just allow the node in a repeater to be listed as children of the repeater parent
+                // (could allow to use a repeater inside a Column or Row component)
+
+                // todo
+                // we must be able to add and remove items at runtime
+                // repeater_example_delete_item(&mut engine, i);
             }
         }
     );

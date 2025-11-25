@@ -104,9 +104,12 @@ async fn main() {
                     // Emit a signal handled by the root node
                     //emit!(engine, root, clicked);
                     emit(engine, "root", "clicked");
+                    println!("Button clicked, emitted 'clicked' signal on root node. {}", $.this.text);
                 }
             }
 
+            // Repeater example - dynamically create multiple items at runtime
+            // WIP
             Repeater {
                 id: repeater_example
 
@@ -114,8 +117,7 @@ async fn main() {
                 anchors: fill
 
                 on_ready: {
-                    let count = $.repeater_example.item_count as u32;
-                    for i in 0 .. count {
+                    for i in 0 .. $.this.item_count as u32 {
                         repeater_example_create_item(&mut engine, i);
                     }
                 }
