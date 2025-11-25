@@ -197,7 +197,7 @@ The parts listed below barely works for some.
 
 * Minimal implementation of Repeater ✅
 
-* Implement $.this and $.this.parent notations ✅
+* Implement $.this and $.parent notations ✅
 
 ## Planned Features / TODO (order by interest)
 
