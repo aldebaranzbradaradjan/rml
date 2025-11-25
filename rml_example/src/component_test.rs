@@ -32,6 +32,7 @@ async fn main() {
             id: root
             anchors: fill
             color color: { DARKGRAY }
+            string info: "Component Test"
 
             // Use the imported Button component
             UI::Button {
@@ -42,6 +43,7 @@ async fn main() {
                 font: "liberation"
                 on_click: {
                     println!("Main button clicked!");
+                    println!("Parent info: {}", $.parent.info);
                     $.info_card.content = "Main button clicked! (with unique ID) - see console output for more info about the event".to_string();
                 }
             }
@@ -68,7 +70,7 @@ async fn main() {
                 on_click: {
                     println!("Third button clicked!");
                     $.info_card.content = "Third button clicked! (with unique ID) - see console output for more info about the event".to_string();
-                    $.third_button.count += 1.;
+                    $.this.count += 1.;
                     update();
                 }
 

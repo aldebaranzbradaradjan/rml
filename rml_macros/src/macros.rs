@@ -5,6 +5,7 @@ use rml_core::prelude::{warn, RED};
 use syn::parse::{Parse, ParseBuffer, ParseStream};
 use syn::{Ident, Lit, Token, Expr, ExprPath, Member, LitStr};
 use rml_core::{AbstractValue, ItemTypeEnum};
+use uuid::fmt::Simple;
 use std::collections::HashMap;
 use std::fs;
 use regex::Regex;
@@ -407,14 +408,28 @@ impl RmlNode {
 
 impl RmlNode {
 
-    pub fn generate_with_components_and_counter(&mut self, components: &HashMap<String, ComponentDefinition>, id_counter: &mut u32, properties_mapping: &HashMap<String, AbstractValue>) -> GenResult {
+    pub fn generate_with_components_and_counter(
+        &mut self,
+        components: &HashMap<String, ComponentDefinition>,
+        id_counter: &mut u32,
+        properties_mapping: &HashMap<String, AbstractValue>,
+        parent_id: &str,
+        parent_is_repeater: bool,
+        ancestor_is_repeater: bool,
+    ) -> GenResult {
         let node_type_str = self._ident.to_string();
 
         // Check if this is a custom component
         if let Some(component_def) = components.get(&node_type_str) {
             // For custom components, we expand them by generating the component's node
             // and applying the properties passed to the component
-            let cmp = self.generate_custom_component_with_counter(component_def, id_counter, properties_mapping);
+            let cmp = self.generate_custom_component_with_counter(
+                component_def,
+                id_counter,
+                properties_mapping,
+                parent_id,
+                parent_is_repeater,
+                ancestor_is_repeater,);
             return cmp;
         }
 
@@ -424,6 +439,7 @@ impl RmlNode {
             "Text" => ItemTypeEnum::Text,
             "MouseArea" => ItemTypeEnum::MouseArea,
             "Texture" => ItemTypeEnum::Texture,
+            "Repeater" => ItemTypeEnum::Repeater,
             _ => panic!("Unknown node type: {}", node_type_str),
         };
         
@@ -449,29 +465,167 @@ impl RmlNode {
         let temp_node = format_ident!("temp_node_{}", id);
 
         let child_results: Vec<GenResult> = self
-            .children
-            //.iter()
-            .iter_mut()
-            .map(|child| child.generate_with_components_and_counter(components, id_counter, properties_mapping))
-            .collect();
+                .children
+                //.iter()
+                .iter_mut()
+                .map(|child| child.generate_with_components_and_counter(
+                    components,
+                    id_counter,
+                    properties_mapping,
+                    &id,
+                    node_type == ItemTypeEnum::Repeater,
+                    ancestor_is_repeater || parent_is_repeater || node_type == ItemTypeEnum::Repeater,
+                ))
+                .collect();
 
-        let child_code: Vec<proc_macro2::TokenStream> = child_results
-            .iter()
-            .map(|(_, code, _, _)| code.clone())
-            .collect();
+        let initializer_of_childs: Vec<proc_macro2::TokenStream>;
+        let child_code: Vec<proc_macro2::TokenStream>;
+        let child_temp_nodes: Vec<proc_macro2::TokenStream>;
+        let child_functions: Vec<proc_macro2::TokenStream>;
+        let repeater_child_functions: Vec<proc_macro2::TokenStream>;
 
-        let child_temp_nodes: Vec<proc_macro2::TokenStream> = child_results
-            .iter()
-            .map(|(id, _, _, _)| {
-                let child_temp_var = format_ident!("temp_node_{}", id);
-                quote! { #child_temp_var }
-            })
-            .collect();
-        
-        let initializer_of_childs: Vec<proc_macro2::TokenStream> = child_results
-            .iter()
-            .map(|(_, _, _, initializer)| initializer.clone())
-            .collect();
+        if node_type != ItemTypeEnum::Repeater {
+            repeater_child_functions = Vec::new();
+
+            child_temp_nodes = child_results
+                .iter()
+                .map(|(id, _, _, _)| {
+                    let child_temp_var = format_ident!("temp_node_{}", id);
+                    quote! { #child_temp_var }
+                })
+                .collect();
+
+            child_code = child_results
+                .iter()
+                .map(|(_, code, _, _)| code.clone())
+                .collect();
+
+            child_functions = child_results
+                .iter()
+                .map(|(_, _, functions, _)| functions.clone())
+                .collect();
+
+            initializer_of_childs = child_results
+                .iter()
+                .map(|(_, _, _, initializer)| initializer.clone())
+                .collect();
+        }
+        else {
+            initializer_of_childs = Vec::new();
+            child_code = Vec::new();
+            child_temp_nodes = Vec::new();
+            child_functions = Vec::new();
+
+            let r_child_nodes_id: Vec<String> = child_results
+                .iter()
+                .map(|(id, _, _, _)| {
+                    id.to_string()
+                })
+                .collect();
+            let r_child_node_id = r_child_nodes_id[0].clone();
+            let child_temp_var = format_ident!("temp_node_{}", r_child_node_id);
+            let r_child_node = quote! { #child_temp_var };
+
+            let r_child_codes: Vec<proc_macro2::TokenStream> = child_results
+                .iter()
+                .map(|(_, code, _, _)| code.clone())
+                .collect();
+            let r_child_code = r_child_codes[0].clone();
+
+            let r_child_functions: Vec<proc_macro2::TokenStream> = child_results
+                .iter()
+                .map(|(_, _, functions, _)| functions.clone())
+                .collect();
+            let r_child_functions = r_child_functions[0].clone();
+
+            let r_child_initializers: Vec<proc_macro2::TokenStream> = child_results
+                .iter()
+                .map(|(_, _, _, initializer)| initializer.clone())
+                .collect();
+            let r_child_initializer = r_child_initializers[0].clone();
+
+            // transform the dollar_this and dollar_parent in the child code
+            println!("Repeater child id: {}", r_child_node_id);
+            println!("Repeater id: {}", id);
+            println!("Parent id: {}", parent_id);
+
+            // the child of a repeater (that must be unique) will be generated by the repeater itself,
+            // and can be instantiated and deleted multiple times at runtime
+            // the child node code will be instantiated after the repeater position in the tree
+            // the repeater will hold the code of its child as a TokenStream to instantiate it when needed
+            // due to the nature of the rml build system, there is no way to generate the child node code at runtime
+            // instead we can generate the static part (functions, callbacks) at compile time, and the dynamic part (node creation, bindings) at runtime
+
+            // all the child creation must be placed in a special function that will be called by the repeater
+            // this function will return the id of the created node
+            // the input of the function will be the index of the item to create
+            // the function name will be unique to avoid name clashes, composed of the repeater id and a suffix "_create_item"
+            // let r_child_initializer = r_child_initializers[0].clone();
+
+            let block_string = format!("{}", quote! { #r_child_initializer });
+            let block_string = transform_dollar_this_parent_syntax(&r_child_node_id, &id, &block_string, properties_mapping);
+            let r_child_initializer : proc_macro2::TokenStream = block_string.parse().unwrap();
+
+            let block_string = format!("{}", quote! { #r_child_code });
+            let block_string = transform_dollar_this_parent_syntax(&r_child_node_id, &id, &block_string, properties_mapping);
+            let r_child_code : proc_macro2::TokenStream = block_string.parse().unwrap();
+
+            // a last thing, we need to diversify the all the ids in the child codefor each call of the repeater create function
+
+            // let block_string = format!("{}", quote! { #r_child_code });
+            // //let block_string = block_string.replace(&format!("temp_node_{}", r_child_node_id), "new_id");
+            // let block_string = block_string.replace(&format!("\"{}\"", r_child_node_id),"new_id");
+            // let r_child_code : proc_macro2::TokenStream = block_string.parse().unwrap();
+
+            // we need to create a map that get all generated_id_XXX in the child code and replace them with generated_id_XXX_randompart
+            let replacement_map = generate_id_replacement_map(&r_child_code.to_string());
+            println!("Replacement map: {:?}", replacement_map);
+
+            // but we can't just replace the ids in the code, we need to replace only the id string def by 
+            // format!("{}_{}", id_in_map, new_id.to_string())
+
+            let mut r_child_code_string = r_child_code.to_string();
+            let mut r_child_initializer_string = r_child_initializer.to_string();
+            for id in replacement_map {
+                let replacement = format!("format!(\"{id}_{{}}\", new_id.clone()).as_str()");
+                r_child_code_string = r_child_code_string.replace( &format!("\"{}\"", id), &replacement);
+                r_child_code_string = r_child_code_string.replace( &format!("\"\"{}\"\"", id), &replacement);
+                r_child_initializer_string = r_child_initializer_string.replace( &format!("\"{}\"", id), &replacement);
+                r_child_initializer_string = r_child_initializer_string.replace( &format!("\"\"{}\"\"", id), &replacement);
+            }
+            let r_child_code : proc_macro2::TokenStream = r_child_code_string.parse().unwrap();
+            let r_child_initializer : proc_macro2::TokenStream = r_child_initializer_string.parse().unwrap();
+
+            
+            let repeater_create_function_name = format_ident!("{}_create_item", id);
+            //let repeater_delete_function_name = format_ident!("{}_delete_item", id);
+            let repeater_create_function = quote! {
+                fn #repeater_create_function_name(engine: &mut RmlEngine, index: u32) -> u32 {
+
+                    let random_part: u32 = index;//uuid::Uuid::new_v4().as_u128() as u32;
+                    //let new_id = format!("{}", random_part); //"666";
+                    let s = format!("{}", random_part);   // String
+                    let new_id: Arc<str> = Arc::from(s);  // Arc<str>
+
+                    let repeater_node = engine.get_node_id(#id).unwrap();
+
+                    #r_child_functions
+                    #r_child_code;
+                    engine.add_child(repeater_node, #r_child_node);
+                    let prop = engine.add_property(Property::new(AbstractValue::Number(index as f32)));
+                    engine.add_property_to_node(#r_child_node, "index".to_string(), prop);
+
+                    #r_child_initializer
+
+                    0
+                }
+            };
+
+            let mut tmp_fn_vec = Vec::new();
+            tmp_fn_vec.push(repeater_create_function);
+            //tmp_fn_vec.push(repeater_delete_function);
+            repeater_child_functions = tmp_fn_vec;
+        }
 
         let initializer: Vec<proc_macro2::TokenStream> = self
             .properties
@@ -483,11 +637,21 @@ impl RmlNode {
                 // it's a binding
                 if !k_string.starts_with("on_") && !k_string.ends_with("_changed") {
                     let value = match v {
-                        Value::Block(block) => {
+                        Value::Block(oblock) => {
+                            let block_string = format!("{}", quote! { #oblock });
+                            let block;
+                            if !parent_is_repeater {                   
+                                // replace dollar_this and dollar_parent usage in the block
+                                println!("Transforming block string for node id '{}', parent id '{}'", id, parent_id);
+                                let block_string = transform_dollar_this_parent_syntax(&id, &parent_id, &block_string, properties_mapping);
+                                block = syn::parse_str::<syn::Block>(&block_string).unwrap();
+                            }
+                            else { block = oblock.clone(); }
+
                             // find the property on wich depend the callback, we will need to analyze the block code
                             // and compare the property names in the block with the property names in the engine
                             // get block in string
-                            let block_string = format!("{}", quote! { #block });
+                            //let block_string = format!("{}", quote! { #block });
                             let related_property = find_related_property_for_binding(id.clone(), k_string, block_string);
                             // Generate the binding calls
                             let binding_calls: Vec<proc_macro2::TokenStream> = related_property.iter().map(|(node, prop)| {
@@ -497,22 +661,48 @@ impl RmlNode {
                             }).collect();
 
                             let temp_node_copy = temp_node.clone();
-                            quote! {
-                                // here we set the property created in the properties part, this code will be executed in the initializer stage
-                                let value: AbstractValue = #block .into();
-                                let node_name = engine.get_node(#temp_node_copy ).unwrap().id.clone();
-                                engine.set_property_of_node(&node_name, stringify!(#k_ident), value);
-                                
-                                let captured_node = #temp_node;
-                                // create a callback to set the property when the related property used in the block changes
-                                let cb_id = engine.add_callback(move |engine| {
+
+                            if ancestor_is_repeater {
+                                quote! {
+                                    {
+                                        let new_id_b = new_id.clone();
+                                        let new_id = new_id.clone();
+                                        // here we set the property created in the properties part, this code will be executed in the initializer stage
+                                        let value: AbstractValue = #block .into();
+                                        let node_name = engine.get_node(#temp_node_copy).unwrap().id.clone();
+                                        engine.set_property_of_node(&node_name, stringify!(#k_ident), value);
+                                        
+                                        let captured_node = #temp_node;
+                                        // create a callback to set the property when the related property used in the block changes
+                                        let cb_id = engine.add_callback( move |engine| {
+                                            let value: AbstractValue = #block .into();
+                                            let node_name = engine.get_node( captured_node ).unwrap().id.clone();
+                                            engine.set_property_of_node(&node_name, stringify!(#k_ident), value);
+                                        });
+                                        let new_id = new_id_b.clone();
+                                    
+                                        // bind the property to the callback for each related property
+                                        #(#binding_calls)*
+                                    } 
+                                }   
+                            } else {
+                                quote! {
+                                    // here we set the property created in the properties part, this code will be executed in the initializer stage
                                     let value: AbstractValue = #block .into();
-                                    let node_name = engine.get_node( captured_node ).unwrap().id.clone();
+                                    let node_name = engine.get_node(#temp_node_copy).unwrap().id.clone();
                                     engine.set_property_of_node(&node_name, stringify!(#k_ident), value);
-                                });
+                                    
+                                    let captured_node = #temp_node;
+                                    // create a callback to set the property when the related property used in the block changes
+                                    let cb_id = engine.add_callback( move |engine| {
+                                        let value: AbstractValue = #block .into();
+                                        let node_name = engine.get_node( captured_node ).unwrap().id.clone();
+                                        engine.set_property_of_node(&node_name, stringify!(#k_ident), value);
+                                    });
                                 
-                                // bind the property to the callback for each related property
-                                #(#binding_calls)*
+                                    // bind the property to the callback for each related property
+                                    #(#binding_calls)*
+                                }
                             }
                         }
                         _ => { quote! {} }
@@ -520,7 +710,7 @@ impl RmlNode {
                     value
                 }
                 // it's an initializer
-                else  if k_string.starts_with("on_ready") {
+                else if k_string.starts_with("on_ready") {
                     let value = match v {
                         Value::Block(block) => {
                             quote! {
@@ -568,6 +758,8 @@ impl RmlNode {
 
         let functions_code = quote! {
             #(#functions)*
+            #(#child_functions)*
+            #(#repeater_child_functions)*
         };
 
         // Generate the properties code
@@ -589,11 +781,33 @@ impl RmlNode {
                 } else if k_string.starts_with("on_") && k_string.ends_with("_changed") {
                     // Property change callbacks
                     let observed = k_string.trim_start_matches("on_").trim_end_matches("_changed");
-                    if let Value::Block(block) = v {
-                        quote! {
-                            let cb_id = engine.add_callback( |engine| #block );
-                            engine.bind_node_property_to_callback( #id, #observed, cb_id );
+                    if let Value::Block(oblock) = v {
+                        let block;
+                        if !parent_is_repeater {                   
+                            // replace dollar_this and dollar_parent usage in the block
+                            let block_string = format!("{}", quote! { #oblock });
+                            let block_string = transform_dollar_this_parent_syntax(&id, &parent_id, &block_string, properties_mapping);
+                            block = syn::parse_str::<syn::Block>(&block_string).unwrap();
                         }
+                        else { block = oblock.clone(); }
+
+                        if ancestor_is_repeater {
+                            quote! {
+                                {
+                                    let new_id_b = new_id.clone();
+                                    let new_id = new_id.clone();
+                                    let cb_id = engine.add_callback( move |engine| #block );
+                                    let new_id = new_id_b.clone();
+                                    engine.bind_node_property_to_callback(#id, #observed, cb_id);
+                                } 
+                            }   
+                        } else {
+                            quote! {
+                                let cb_id = engine.add_callback( move |engine| #block );
+                                engine.bind_node_property_to_callback(#id, #observed, cb_id);
+                            }
+                        }
+
                     } else {
                         quote! {}
                     }
@@ -607,10 +821,31 @@ impl RmlNode {
                     
                     if is_custom_signal {
                         // Custom signal handler
-                        if let Value::Block(block) = v {
-                            quote! {
-                                let cb_id = engine.add_callback( |engine| #block );
-                                engine.bind_node_property_to_callback( #id, #event_name, cb_id );
+                        if let Value::Block(oblock) = v {
+                            let block;
+                            if !parent_is_repeater {                   
+                                // replace dollar_this and dollar_parent usage in the block
+                                let block_string = format!("{}", quote! { #oblock });
+                                let block_string = transform_dollar_this_parent_syntax(&id, &parent_id, &block_string, properties_mapping);
+                                block = syn::parse_str::<syn::Block>(&block_string).unwrap();
+                            }
+                            else { block = oblock.clone(); }
+
+                            if ancestor_is_repeater {
+                                quote! {
+                                    {
+                                        let new_id_b = new_id.clone();
+                                        let new_id = new_id.clone();
+                                        let cb_id = engine.add_callback( move |engine| #block );
+                                        let new_id = new_id_b.clone();
+                                        engine.bind_node_property_to_callback(#id, #event_name, cb_id );
+                                    } 
+                                }   
+                            } else {
+                                quote! {
+                                    let cb_id = engine.add_callback( move |engine| #block );
+                                    engine.bind_node_property_to_callback(#id, #event_name, cb_id );
+                                }
                             }
                         } else {
                             quote! {}
@@ -646,10 +881,31 @@ impl RmlNode {
                             _ => return quote! {}, // Unknown event type
                         };
                         
-                        if let Value::Block(block) = v {
-                            quote! {
-                                let cb_id = engine.add_callback( |engine| #block );
-                                engine.add_event_handler( #event_type, #id, cb_id );
+                        if let Value::Block(oblock) = v {
+                            let block;
+                            if !parent_is_repeater {                   
+                                // replace dollar_this and dollar_parent usage in the block
+                                let block_string = format!("{}", quote! { #oblock });
+                                let block_string = transform_dollar_this_parent_syntax(&id, &parent_id, &block_string, properties_mapping);
+                                block = syn::parse_str::<syn::Block>(&block_string).unwrap();
+                            }
+                            else { block = oblock.clone(); }
+
+                            if ancestor_is_repeater {
+                                quote! {
+                                    {
+                                        let new_id_b = new_id.clone();
+                                        let new_id = new_id.clone();
+                                        let cb_id = engine.add_callback( move |engine| #block );
+                                        let new_id = new_id_b.clone();
+                                        engine.add_event_handler( #event_type, #id, cb_id );
+                                    } 
+                                }   
+                            } else {
+                                quote! {
+                                    let cb_id = engine.add_callback( move |engine| #block );
+                                    engine.add_event_handler( #event_type, #id, cb_id );
+                                }
                             }
                         } else {
                             quote! {}
@@ -713,7 +969,15 @@ impl RmlNode {
         (id, node_code, functions_code, initializer_code)
     }
 
-    fn generate_custom_component_with_counter(&self, component_def: &ComponentDefinition, id_counter: &mut u32, properties_mapping: &HashMap<String, AbstractValue>) -> GenResult {
+    fn generate_custom_component_with_counter(
+        &mut self, 
+        component_def: &ComponentDefinition,
+        id_counter: &mut u32,
+        properties_mapping: &HashMap<String, AbstractValue>,
+        parent_id: &str,
+        parent_is_repeater: bool,
+        ancestor_is_repeater: bool
+    ) -> GenResult {
         // Read and parse the component file
         let file_content = fs::read_to_string(&component_def.path).unwrap();
 
@@ -729,6 +993,10 @@ impl RmlNode {
             .unwrap_or("");
 
 
+        // TODO : if we have multiples levels of components, we need to be sure that the *id_counter += 1; is done only once per component instance
+        // we do ping pong between generate_with_components_and_counter and component generate_custom_component_with_counter 
+        // in the case of nested components, so the id_counter is incremented multiple times for the same component instance
+
         // maybe there is id property in self.properties, so we need to use that instead
         let n_id = self.properties.iter().find_map(|(_t, k, v)| {
             if k.to_string() == "id" { 
@@ -741,6 +1009,10 @@ impl RmlNode {
             *id_counter += 1;
             n_id
         });
+        // add it to self.properties if not present
+        if !self.properties.iter().any(|(_t, k, _v)| k.to_string() == "id") {
+            self.properties.push((PropertyType::String, PropertyKey::Simple(Ident::new("id", Span::call_site())), Value::Lit(Lit::Str(syn::LitStr::new(&n_id, Span::call_site())))));
+        }
 
         let file_content = if !original_id.is_empty() {
             file_content.replace(original_id, &n_id)
@@ -772,7 +1044,14 @@ impl RmlNode {
         component_node.children.extend(self.children.clone());
         
         // Generate the component with the applied properties
-        let component_gen_res = component_node.generate_with_components_and_counter(&components, id_counter, properties_mapping);
+        let component_gen_res = component_node.generate_with_components_and_counter(
+            &components, 
+            id_counter,
+            properties_mapping,
+            parent_id,
+            parent_is_repeater,
+            ancestor_is_repeater
+        );
         let new_id = component_gen_res.0.clone();
 
         // replace the original id present in the component (in callbacks) with the new id

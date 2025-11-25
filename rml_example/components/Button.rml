@@ -22,7 +22,7 @@ Rectangle {
     Text {
         anchors: center
         max_width: { $.root_btn_template.width }
-        text: { $.root_btn_template.text }
+        string text: { $.root_btn_template.text }
         string font: { $.root_btn_template.font }
         color color: { WHITE }
         number font_size: 16
@@ -30,7 +30,7 @@ Rectangle {
     
     MouseArea {
         anchors: fill
-        on_click: { emit!(engine, root_btn_template, click); }
+        on_click: { emit(engine, "root_btn_template", "click"); }
         on_mouse_down: { $.root_btn_template.pushed = true; }
         on_mouse_up: { $.root_btn_template.pushed = false; }
         on_mouse_enter: { $.root_btn_template.hovered = true; }

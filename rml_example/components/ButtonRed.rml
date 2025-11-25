@@ -1,6 +1,6 @@
 import "." as UI
 
 UI::Button {
-    color base_color: { RED }
+    base_color: { RED }
 }
 

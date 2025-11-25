@@ -1,17 +1,46 @@
+use std::{
+    collections::HashMap,
+    process::{Command, Stdio},
+};
 
-use std::{collections::HashMap, process::{Command, Stdio}};
+use rml_core::{AbstractValue};
 
-use rml_core::AbstractValue;
+pub fn generate_id_replacement_map(code: &str) -> Vec<String> {
+    use regex::Regex;
+    let mut replacement_map = Vec::new();
+
+    let id_pattern = Regex::new(r"generated_id_(\d+)").unwrap();
+
+    for cap in id_pattern.captures_iter(code) {
+        let original_id = cap.get(0).unwrap().as_str().to_string();
+        if !replacement_map.contains(&original_id) {
+            replacement_map.push(original_id);
+        }
+    }
+
+    replacement_map
+}
 
 pub fn format_code_for_binding_extraction(code: &str) -> String {
     // remove line jumps;
     let mut code = code.replace("\n", "").replace("\r", "");
     // add line jump before get macro calls
-    let macros = [ "get_value!", "get_number!", "get_string!",
-    "get_bool!", "get_color!", "get_computed_x!", "get_computed_y!",
-    "get_computed_width!", "get_computed_height!",
-    "get_number_property_of_node", "get_string_property_of_node", "get_bool_property_of_node",
-    "get_color_property_of_node", "get_property_of_node" ];
+    let macros = [
+        "get_value!",
+        "get_number!",
+        "get_string!",
+        "get_bool!",
+        "get_color!",
+        "get_computed_x!",
+        "get_computed_y!",
+        "get_computed_width!",
+        "get_computed_height!",
+        "get_number_property_of_node",
+        "get_string_property_of_node",
+        "get_bool_property_of_node",
+        "get_color_property_of_node",
+        "get_property_of_node",
+    ];
     for macro_name in macros {
         code = code.replace(macro_name, &format!("\n{}", macro_name));
     }
@@ -28,25 +57,50 @@ pub fn format_code(code: &str) -> String {
     {
         use std::io::Write;
         let stdin = rustfmt.stdin.as_mut().expect("Failed to open stdin");
-        stdin.write_all(code.as_bytes()).expect("Failed to write code");
+        stdin
+            .write_all(code.as_bytes())
+            .expect("Failed to write code");
     }
 
     let output = rustfmt.wait_with_output().expect("Failed to read output");
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
-pub fn transform_dollar_syntax(code: &str, properties_mapping: &HashMap<String, AbstractValue>) -> String {
+pub fn transform_dollar_this_parent_syntax(
+    this_id: &str,
+    parent_id: &str,
+    code: &str,
+    properties_mapping: &HashMap<String, AbstractValue>,
+) -> String {
+    // replace $.this and $.parent with dollar_this and dollar_parent
+    let code = code
+        .replace("dollar_this", &format!("$.{}", this_id))
+        .replace("dollar_parent", &format!("$.{}", parent_id));
+    transform_dollar_syntax(&code, properties_mapping)
+}
+
+pub fn transform_dollar_syntax(
+    code: &str,
+    properties_mapping: &HashMap<String, AbstractValue>,
+) -> String {
     use regex::Regex;
-    
+
     // Only transform if there are actually $ expressions
     if !code.contains("$.") {
         return code.to_string();
     }
-    
+
+    // replace $.this and $.parent with dollar_this and dollar_parent
+    let code = code
+        .replace("$.this", "dollar_this")
+        .replace("$.parent", "dollar_parent");
     let mut result = code.to_string();
-    
+
     // Handle compound assignments first: $.node.prop += value; ([+\-*/])=
-    let compound_assign_pattern = Regex::new(r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*([+\-*/])=\s*([^;]+)\s*;").unwrap();
+    let compound_assign_pattern = Regex::new(
+        r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*([+\-*/])=\s*([^;]+)\s*;",
+    )
+    .unwrap();
     result = compound_assign_pattern.replace_all(&result, |caps: &regex::Captures| {
         let node_id = &caps[1];
         let property = &caps[2];
@@ -60,7 +114,9 @@ pub fn transform_dollar_syntax(code: &str, properties_mapping: &HashMap<String, 
                 if operator != "+" {
                     panic!("Invalid operator '{}' for string property '{}.{}'. Only '+=' is allowed for strings.", operator, node_id, property);
                 }
-                format!("set_string!(engine, {}, {}, format!(\"{{}}{{}}\", get_string!(engine, {}, {}), {}));", 
+                // format!("set_string!(engine, {}, {}, format!(\"{{}}{{}}\", get_string!(engine, {}, {}), {}));", 
+                //     node_id, property, node_id, property, value)
+                format!("engine.set_property_of_node(\"{}\", \"{}\", AbstractValue::String(format!(\"{{}}{{}}\", engine.get_string_property_of_node(\"{}\", \"{}\", \"\"), {}));", 
                     node_id, property, node_id, property, value)
             },
             Some(Some(AbstractValue::Bool(_))) => {
@@ -70,7 +126,9 @@ pub fn transform_dollar_syntax(code: &str, properties_mapping: &HashMap<String, 
                 panic!("Compound assignments are not supported for color properties '{}.{}'.", node_id, property);
             },
             Some(Some(AbstractValue::Number(_))) => {
-                format!("set_number!(engine, {}, {}, get_number!(engine, {}, {}) {} {});", 
+                // format!("set_number!(engine, {}, {}, get_number!(engine, {}, {}) {} {});", 
+                //     node_id, property, node_id, property, operator, value)
+                format!("engine.set_property_of_node(\"{}\", \"{}\", AbstractValue::Number(engine.get_number_property_of_node(\"{}\", \"{}\", 0.0) {} {}));", 
                     node_id, property, node_id, property, operator, value)
             }
             _ => {
@@ -78,62 +136,78 @@ pub fn transform_dollar_syntax(code: &str, properties_mapping: &HashMap<String, 
             }
         }
     }).to_string();
-    
+
     // Handle simple assignments: $.node.prop = value;
     // Match = but not ==, !=, <=, >=, +=, -=, *=, /=
-    let assign_pattern = Regex::new(r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([^=;][^;]*)\s*;").unwrap();
-    result = assign_pattern.replace_all(&result, |caps: &regex::Captures| {
-        let node_id = &caps[1];
-        let property = &caps[2];
-        let value = &caps[3].trim();
+    let assign_pattern = Regex::new(
+        r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([^=;][^;]*)\s*;",
+    )
+    .unwrap();
+    result = assign_pattern
+        .replace_all(&result, |caps: &regex::Captures| {
+            let node_id = &caps[1];
+            let property = &caps[2];
+            let value = &caps[3].trim();
 
-        let abstract_value = properties_mapping.get(&format!("{}.{}", node_id, property));
-        match Some(abstract_value) {
-            Some(Some(AbstractValue::String(_))) => {
-                format!("set_string!(engine, {}, {}, {});", node_id, property, value)
-            },
-            Some(Some(AbstractValue::Bool(_))) => {
-                format!("set_bool!(engine, {}, {}, {});", node_id, property, value)
-            },
-            Some(Some(AbstractValue::Color(_))) => {
-                format!("set_color!(engine, {}, {}, {});", node_id, property, value)
-            },
-            Some(Some(AbstractValue::Number(_))) => {
-                format!("set_number!(engine, {}, {}, {});", node_id, property, value)
+            let abstract_value = properties_mapping.get(&format!("{}.{}", node_id, property));
+            match Some(abstract_value) {
+                Some(Some(AbstractValue::String(_))) => {
+                    //format!("set_string!(engine, {}, {}, {});", node_id, property, value)
+                    format!("engine.set_property_of_node(\"{}\", \"{}\", AbstractValue::String({}));", node_id, property, value)
+                }
+                Some(Some(AbstractValue::Bool(_))) => {
+                    //format!("set_bool!(engine, {}, {}, {});", node_id, property, value)
+                    format!("engine.set_property_of_node(\"{}\", \"{}\", AbstractValue::Bool({}));", node_id, property, value)
+                }
+                Some(Some(AbstractValue::Color(_))) => {
+                    //format!("set_color!(engine, {}, {}, {});", node_id, property, value)
+                    format!("engine.set_property_of_node(\"{}\", \"{}\", AbstractValue::Color({}));", node_id, property, value)
+                }
+                Some(Some(AbstractValue::Number(_))) => {
+                    //("set_number!(engine, {}, {}, {});", node_id, property, value)
+                    format!("engine.set_property_of_node(\"{}\", \"{}\", AbstractValue::Number({}));", node_id, property, value)
+                }
+                _ => {
+                    panic!("Can't find property '{}.{}'.", node_id, property);
+                }
             }
-            _ => {
-                panic!("Can't find property '{}.{}'.", node_id, property);
-            }
-        }
-    }).to_string();
-    
+        })
+        .to_string();
+
     // Handle regular read operations: $.node.prop (in expressions)
     // Be more careful to only match standalone expressions, not inside strings
-    let dollar_pattern = Regex::new(r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\b").unwrap();
-    result = dollar_pattern.replace_all(&result, |caps: &regex::Captures| {
-        let node_id = &caps[1];
-        let property = &caps[2];
-        
-        let abstract_value = properties_mapping.get(&format!("{}.{}", node_id, property));
-        match Some(abstract_value) {
-            Some(Some(AbstractValue::String(_))) => {
-                format!("get_string!(engine, {}, {})", node_id, property)
-            },
-            Some(Some(AbstractValue::Bool(_))) => {
-                format!("get_bool!(engine, {}, {})", node_id, property)
-            },
-            Some(Some(AbstractValue::Color(_))) => {
-                format!("get_color!(engine, {}, {})", node_id, property)
-            },
-            Some(Some(AbstractValue::Number(_))) => {
-                format!("get_number!(engine, {}, {})", node_id, property)
+    let dollar_pattern =
+        Regex::new(r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\b").unwrap();
+    result = dollar_pattern
+        .replace_all(&result, |caps: &regex::Captures| {
+            let node_id = &caps[1];
+            let property = &caps[2];
+
+            let abstract_value = properties_mapping.get(&format!("{}.{}", node_id, property));
+            match Some(abstract_value) {
+                Some(Some(AbstractValue::String(_))) => {
+                    //format!("get_string!(engine, {}, {})", node_id, property)
+                    format!("engine.get_string_property_of_node(\"{}\", \"{}\", \"\".to_string())", node_id, property)
+                }
+                Some(Some(AbstractValue::Bool(_))) => {
+                    //format!("get_bool!(engine, {}, {})", node_id, property)
+                    format!("engine.get_bool_property_of_node(\"{}\", \"{}\", false)", node_id, property)
+                }
+                Some(Some(AbstractValue::Color(_))) => {
+                    //format!("get_color!(engine, {}, {})", node_id, property)
+                    format!("engine.get_color_property_of_node(\"{}\", \"{}\", RED)", node_id, property)
+                }
+                Some(Some(AbstractValue::Number(_))) => {
+                    //format!("get_number!(engine, {}, {})", node_id, property)
+                    format!("engine.get_number_property_of_node(\"{}\", \"{}\", 0.0)", node_id, property)
+                }
+                _ => {
+                    panic!("Can't find property '{}.{}'.", node_id, property);
+                }
             }
-            _ => {
-                panic!("Can't find property '{}.{}'.", node_id, property);
-            }
-        }
-    }).to_string();
-    
+        })
+        .to_string();
+
     result
 }
 
@@ -244,20 +318,14 @@ mod tests {
     fn test_read_number() {
         let code = "x = $.node.num + 1;";
         let result = transform_dollar_syntax(code, &mapping());
-        assert_eq!(
-            result,
-            "x = get_number!(engine, node, num) + 1;"
-        );
+        assert_eq!(result, "x = get_number!(engine, node, num) + 1;");
     }
 
     #[test]
     fn test_read_string() {
         let code = "print($.node.str);";
         let result = transform_dollar_syntax(code, &mapping());
-        assert_eq!(
-            result,
-            "print(get_string!(engine, node, str));"
-        );
+        assert_eq!(result, "print(get_string!(engine, node, str));");
     }
 
     #[test]
@@ -284,7 +352,6 @@ mod tests {
     // ---------------------------------------------------
     #[test]
     fn test_real_01_property() {
-
         let code = "fn compute_font_size() { if $.node.num == 0.0 { $.node.str = \"Click Me\".to_string(); } }";
         let result = transform_dollar_syntax(code, &mapping());
         println!("Result: {}", result);
@@ -323,9 +390,7 @@ pub fn inject_engine_text_based(
         let mut modified_line = line.to_string();
 
         // detect start of callback
-        if line.contains("engine.add_callback")
-            && line.contains("move | engine |")
-        {
+        if line.contains("engine.add_callback") && line.contains("move | engine |") {
             in_callback = true;
             // we expect an opening brace, but we count braces
             // anyway to remain robust.
@@ -384,9 +449,10 @@ pub fn inject_engine_in_block(mut block: syn::Block, initializer: bool) -> syn::
             Stmt::Expr(expr, semi_opt) => {
                 let expr = match expr {
                     Expr::Call(mut call) => {
-                        let has_engine = call.args.iter().any(|arg| {
-                            matches!(arg, Expr::Path(p) if p.path.is_ident("engine"))
-                        });
+                        let has_engine = call
+                            .args
+                            .iter()
+                            .any(|arg| matches!(arg, Expr::Path(p) if p.path.is_ident("engine")));
 
                         if !has_engine {
                             if initializer {
@@ -411,8 +477,11 @@ pub fn inject_engine_in_block(mut block: syn::Block, initializer: bool) -> syn::
     block
 }
 
-
-pub fn find_related_property_for_binding(id: String, property: String, block_string: String) -> Vec<(String, String)> {
+pub fn find_related_property_for_binding(
+    id: String,
+    property: String,
+    block_string: String,
+) -> Vec<(String, String)> {
     // ex: k_string = "x", block_string =
     // "{
     // let outer_rect_width = get_number!(engine, outer_rect, width);
@@ -423,7 +492,7 @@ pub fn find_related_property_for_binding(id: String, property: String, block_str
     // will return [(outer_rect, width), (inner_rect, width)]
     let block_string = format_code_for_binding_extraction(block_string.as_str());
     let mut related_properties = Vec::new();
-    
+
     // if in block we find get_number!, get_string!, get_bool!, get_color!
     // get_computed_x!, get_computed_y!, get_computed_width!, get_computed_height!
     // get_number_property_of_node, get_string_property_of_node, get_bool_property_of_node, get_color_property_of_node
@@ -431,18 +500,23 @@ pub fn find_related_property_for_binding(id: String, property: String, block_str
     // we will add it to related_properties
     for line in block_string.lines() {
         let trimmed_line = line.trim();
-        
-        if trimmed_line.contains("get_value!") ||trimmed_line.contains("get_number!") || trimmed_line.contains("get_string!") || 
-           trimmed_line.contains("get_bool!") || trimmed_line.contains("get_color!") ||
-           trimmed_line.contains("get_computed_x!") || trimmed_line.contains("get_computed_y!") || 
-           trimmed_line.contains("get_computed_width!") || trimmed_line.contains("get_computed_height!") {
-            
+
+        if trimmed_line.contains("get_value!")
+            || trimmed_line.contains("get_number!")
+            || trimmed_line.contains("get_string!")
+            || trimmed_line.contains("get_bool!")
+            || trimmed_line.contains("get_color!")
+            || trimmed_line.contains("get_computed_x!")
+            || trimmed_line.contains("get_computed_y!")
+            || trimmed_line.contains("get_computed_width!")
+            || trimmed_line.contains("get_computed_height!")
+        {
             // Parse macro calls like get_number!(engine, node_name, property_name)
             if let Some(start) = trimmed_line.find('(') {
                 if let Some(end) = trimmed_line.find(')') {
                     let params = &trimmed_line[start + 1..end];
                     let parts: Vec<&str> = params.split(',').map(|s| s.trim()).collect();
-                    
+
                     if parts.len() >= 3 {
                         let node_name = parts[1].trim();
                         let property_name = parts[2].trim().trim_matches('"');
@@ -453,21 +527,20 @@ pub fn find_related_property_for_binding(id: String, property: String, block_str
                     }
                 }
             }
-        }
-        else if trimmed_line.contains("get_number_property_of_node") || 
-                trimmed_line.contains("get_string_property_of_node") ||
-                trimmed_line.contains("get_bool_property_of_node") || 
-                trimmed_line.contains("get_color_property_of_node") || 
-                trimmed_line.contains("get_property_of_node") {
-            
-            // Parse method calls like engine.get_number_property_of_node(node_name, "property_name", default)
+        } else if trimmed_line.contains("get_number_property_of_node")
+            || trimmed_line.contains("get_string_property_of_node")
+            || trimmed_line.contains("get_bool_property_of_node")
+            || trimmed_line.contains("get_color_property_of_node")
+            || trimmed_line.contains("get_property_of_node")
+        {
+            // Parse method calls like engine.get_number_property_of_node("node_name", "property_name", default)
             if let Some(start) = trimmed_line.find('(') {
                 if let Some(end) = trimmed_line.rfind(')') {
                     let params = &trimmed_line[start + 1..end];
                     let parts: Vec<&str> = params.split(',').map(|s| s.trim()).collect();
-                    
+
                     if parts.len() >= 2 {
-                        let node_name = parts[0].trim();
+                        let node_name = parts[0].trim().trim_matches('"');
                         let property_name = parts[1].trim().trim_matches('"');
                         if node_name == id && property_name == property {
                             continue;
@@ -478,10 +551,10 @@ pub fn find_related_property_for_binding(id: String, property: String, block_str
             }
         }
     }
-    
+
     // Remove duplicates while preserving order
     let mut seen = std::collections::HashSet::new();
     related_properties.retain(|item| seen.insert(item.clone()));
-    
+
     related_properties
 }

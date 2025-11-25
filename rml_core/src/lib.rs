@@ -18,89 +18,89 @@ pub type BindingId = usize;
 //pub type Closure = Box<dyn Fn(&mut RmlEngine) + Send + Sync>;
 type Callback = Arc<dyn Fn(&mut RmlEngine) + Send + Sync>;
 
-#[macro_export]
-macro_rules! get_number {
-    ($engine:expr, $node:ident, $prop:ident) => {{
-        $engine.get_number_property_of_node(stringify!($node), stringify!($prop), 0.0)
-    }};
-}
+// #[macro_export]
+// macro_rules! get_number {
+//     ($engine:expr, $node:ident, $prop:ident) => {{
+//         $engine.get_number_property_of_node(stringify!($node), stringify!($prop), 0.0)
+//     }};
+// }
 
-#[macro_export]
-macro_rules! set_number {
-    ($engine:expr, $node:ident, $prop:ident, $value:expr) => {{
-        $engine.set_property_of_node(stringify!($node), stringify!($prop), AbstractValue::Number($value))
-    }};
-}
+// #[macro_export]
+// macro_rules! set_number {
+//     ($engine:expr, $node:ident, $prop:ident, $value:expr) => {{
+//         $engine.set_property_of_node(stringify!($node), stringify!($prop), AbstractValue::Number($value))
+//     }};
+// }
 
-#[macro_export]
-macro_rules! get_string {
-    ($engine:expr, $node:ident, $prop:ident) => {{
-        $engine.get_string_property_of_node(stringify!($node), stringify!($prop), "".to_string())
-    }};
-}
+// #[macro_export]
+// macro_rules! get_string {
+//     ($engine:expr, $node:ident, $prop:ident) => {{
+//         $engine.get_string_property_of_node(stringify!($node), stringify!($prop), "".to_string())
+//     }};
+// }
 
-#[macro_export]
-macro_rules! set_string {
-    ($engine:expr, $node:ident, $prop:ident, $value:expr) => {{
-        $engine.set_property_of_node(stringify!($node), stringify!($prop), AbstractValue::String($value))
-    }};
-}
+// #[macro_export]
+// macro_rules! set_string {
+//     ($engine:expr, $node:ident, $prop:ident, $value:expr) => {{
+//         $engine.set_property_of_node(stringify!($node), stringify!($prop), AbstractValue::String($value))
+//     }};
+// }
 
-#[macro_export]
-macro_rules! get_bool {
-    ($engine:expr, $node:ident, $prop:ident) => {{
-        $engine.get_bool_property_of_node(stringify!($node), stringify!($prop), false)
-    }};
-}
+// #[macro_export]
+// macro_rules! get_bool {
+//     ($engine:expr, $node:ident, $prop:ident) => {{
+//         $engine.get_bool_property_of_node(stringify!($node), stringify!($prop), false)
+//     }};
+// }
 
-#[macro_export]
-macro_rules! set_bool {
-    ($engine:expr, $node:ident, $prop:ident, $value:expr) => {{
-        $engine.set_property_of_node(stringify!($node), stringify!($prop), AbstractValue::Bool($value))
-    }};
-}
+// #[macro_export]
+// macro_rules! set_bool {
+//     ($engine:expr, $node:ident, $prop:ident, $value:expr) => {{
+//         $engine.set_property_of_node(stringify!($node), stringify!($prop), AbstractValue::Bool($value))
+//     }};
+// }
 
-#[macro_export]
-macro_rules! get_color {
-    ($engine:expr, $node:ident, $prop:ident) => {{
-        $engine.get_color_property_of_node(stringify!($node), stringify!($prop), Color::from_rgba(0, 0, 0, 0))
-    }};
-}
+// #[macro_export]
+// macro_rules! get_color {
+//     ($engine:expr, $node:ident, $prop:ident) => {{
+//         $engine.get_color_property_of_node(stringify!($node), stringify!($prop), Color::from_rgba(0, 0, 0, 0))
+//     }};
+// }
 
-#[macro_export]
-macro_rules! set_color {
-    ($engine:expr, $node:ident, $prop:ident, $value:expr) => {{
-        $engine.set_property_of_node(stringify!($node), stringify!($prop), AbstractValue::Color($value))
-    }};
-}
+// #[macro_export]
+// macro_rules! set_color {
+//     ($engine:expr, $node:ident, $prop:ident, $value:expr) => {{
+//         $engine.set_property_of_node(stringify!($node), stringify!($prop), AbstractValue::Color($value))
+//     }};
+// }
 
-#[macro_export]
-macro_rules! get_computed_x {
-    ($engine:expr, $node:ident) => {{
-        $engine.get_number_property_of_node(stringify!($node), "computed_x", 0.0)
-    }};
-}
+// #[macro_export]
+// macro_rules! get_computed_x {
+//     ($engine:expr, $node:ident) => {{
+//         $engine.get_number_property_of_node(stringify!($node), "computed_x", 0.0)
+//     }};
+// }
 
-#[macro_export]
-macro_rules! get_computed_y {
-    ($engine:expr, $node:ident) => {{
-        $engine.get_number_property_of_node(stringify!($node), "computed_y", 0.0)
-    }};
-}
+// #[macro_export]
+// macro_rules! get_computed_y {
+//     ($engine:expr, $node:ident) => {{
+//         $engine.get_number_property_of_node(stringify!($node), "computed_y", 0.0)
+//     }};
+// }
 
-#[macro_export]
-macro_rules! get_computed_width {
-    ($engine:expr, $node:ident) => {{
-        $engine.get_number_property_of_node(stringify!($node), "computed_width", 0.0)
-    }};
-}
+// #[macro_export]
+// macro_rules! get_computed_width {
+//     ($engine:expr, $node:ident) => {{
+//         $engine.get_number_property_of_node(stringify!($node), "computed_width", 0.0)
+//     }};
+// }
 
-#[macro_export]
-macro_rules! get_computed_height {
-    ($engine:expr, $node:ident) => {{
-        $engine.get_number_property_of_node(stringify!($node), "computed_height", 0.0)
-    }};
-}
+// #[macro_export]
+// macro_rules! get_computed_height {
+//     ($engine:expr, $node:ident) => {{
+//         $engine.get_number_property_of_node(stringify!($node), "computed_height", 0.0)
+//     }};
+// }
 
 
 #[macro_export]
@@ -149,15 +149,15 @@ macro_rules! get_key_event {
     }};
 }
 
-#[macro_export]
-macro_rules! emit {
-    ($engine:expr, $node:ident, $signal:ident) => {{
-        // Emit a signal by setting the signal property to trigger callbacks
-        // We use a toggle mechanism to ensure the signal always triggers
-        let current_value = $engine.get_bool_property_of_node(stringify!($node), stringify!($signal), false);
-        $engine.set_property_of_node(stringify!($node), stringify!($signal), AbstractValue::Bool(!current_value))
-    }};
-}
+// #[macro_export]
+// macro_rules! emit {
+//     ($engine:expr, $node:ident, $signal:ident) => {{
+//         // Emit a signal by setting the signal property to trigger callbacks
+//         // We use a toggle mechanism to ensure the signal always triggers
+//         let current_value = $engine.get_bool_property_of_node(stringify!($node), stringify!($signal), false);
+//         $engine.set_property_of_node(stringify!($node), stringify!($signal), AbstractValue::Bool(!current_value))
+//     }};
+// }
 
 #[macro_export]
 macro_rules! get_value {
@@ -173,6 +173,13 @@ macro_rules! get_value {
             AbstractValue::Null
         }
     }};
+}
+
+pub fn emit(engine: &mut RmlEngine, node: &str, signal: &str) {
+    // Emit a signal by setting the signal property to trigger callbacks
+    // We use a toggle mechanism to ensure the signal always triggers
+    let current_value = engine.get_bool_property_of_node(node, signal, false);
+    engine.set_property_of_node(node, signal, AbstractValue::Bool(!current_value));   
 }
 
 pub fn lighter_color(color: Color, amount: f32) -> Color {
@@ -783,15 +790,15 @@ pub mod prelude {
         RmlEngine,
         Property,
         AbstractValue,
-        get_value,
-        get_bool,
-        set_bool,
-        get_number,
-        set_number,
-        get_string,
-        set_string,
-        get_color,
-        set_color,
+        // get_value,
+        // get_bool,
+        // set_bool,
+        // get_number,
+        // set_number,
+        // get_string,
+        // set_string,
+        // get_color,
+        // set_color,
         darker_color,
         lighter_color,
         invert_color,

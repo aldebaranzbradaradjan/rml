@@ -31,6 +31,10 @@ path = "src/outch_test.rs"
 name = "smiley"
 path = "src/smiley_example.rs"
 
+[[bin]]
+name = "repeater"
+path = "src/repeater_test.rs"
+
 [dependencies]
 rml_core = { path = "../rml_core" }
 rml_macros = { path = "../rml_macros" }

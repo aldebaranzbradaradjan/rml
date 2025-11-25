@@ -1,6 +1,7 @@
 // This example demonstrates how to use the RML library to create a simple 2D GUI
 use rml_core::prelude::*;
 use rml_macros::rml;
+use std::sync::Arc;
 
 fn window_conf() -> Conf {
     Conf {
@@ -95,13 +96,41 @@ async fn main() {
             // Button
             UI::Button {
                 anchors: center | bottom
-                margins: 30
+                margins: 50
                 text: "Increment!"
                 font: "liberation"
 
                 on_click: {
                     // Emit a signal handled by the root node
-                    emit!(engine, root, clicked);
+                    //emit!(engine, root, clicked);
+                    emit(engine, "root", "clicked");
+                }
+            }
+
+            Repeater {
+                id: repeater_example
+
+                number item_count: 3
+                anchors: fill
+
+                on_ready: {
+                    let count = $.repeater_example.item_count as u32;
+                    for i in 0 .. count {
+                        repeater_example_create_item(&mut engine, i);
+                    }
+                }
+
+                UI::ButtonRed {
+                    number index: 0
+                    text: { format!("Item {}", $.this.index) }
+                    font: "liberation"
+                    anchors: horizontal_center | top
+                    top_margin: { $.this.index as f32 * 60.0 + 50.0 }
+                    on_click: {
+                        println!("Runtime generated button clicked!");
+                        println!("Parent count: {}", $.parent.item_count);
+                        println!("This button index: {}", $.this.index);
+                    }
                 }
             }
         }
