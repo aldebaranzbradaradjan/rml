@@ -4,13 +4,13 @@ Node {
 
     fn initItems() {
         if $.this.children_count == 0.0 { return; }
-        let mut prev_y = 0.0;
+        let mut y = 0.0;
 
         for i in 0 .. $.this.children_count as u32 {
             $.this.children[i].anchors = horizontal_center | top;
-            $.this.children[i].top_margin = prev_y;
+            $.this.children[i].top_margin = y;
             if i > 0 {
-                prev_height = $.this.children[i].computed_y;
+                y = $.this.children[i].computed_y;
             }
         }
     }
