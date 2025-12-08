@@ -227,6 +227,8 @@ The parts listed below barely works for some.
 
 * Extend import logic (multiple imports per file, global import at root node)
 
+* Implement all tasks from : https://eugenkiss.github.io/7guis/tasks/ 
+
 * Rename to CML (Cute Markup Language) or RTML (Rustic Markup Language - Rust Toy Markup Language - Real Tiny Markup Language ? Real Time Markup Language ??)
 I'm considering renaming it to CML (Cute Markup Language) or RTML - a more playful alternative to RML, which could be misinterpreted as Rust Markup Language.
 Obviously, build by myself and alone an ui lib that can be called RML and that will be used by all end every rust project as the defacto standard has always be my goal but... well it's pretty hard
