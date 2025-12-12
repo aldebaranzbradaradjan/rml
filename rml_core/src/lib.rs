@@ -375,6 +375,11 @@ impl RmlEngine {
         }
     }
 
+    pub fn create_property(&mut self, node_id: NodeId, name: String, value: AbstractValue) {
+        let prop = self.add_property(Property::new(value));
+        self.add_property_to_node(node_id, name, prop);
+    }
+
 
     pub fn get_property_of_node<T>(
         &self,
@@ -818,6 +823,9 @@ pub mod prelude {
         decompose_color_string,
         get_key_event,
         SystemEvent,
-        NodeId
+        NodeId,
+        get_mouse_event_pos,
+        get_mouse_wheel_delta_x,
+        get_mouse_wheel_delta_y,
     };
 }

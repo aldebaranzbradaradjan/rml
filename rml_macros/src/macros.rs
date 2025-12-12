@@ -311,13 +311,6 @@ impl RmlNode {
                     }
                 };
 
-                // let item: syn::Item = if pre_parse {
-                //     consume_function(&content)?
-                // }
-                // else {
-                //     content.parse::<syn::Item>()?
-                // };
-
                 if let syn::Item::Fn(func) = item {
                     functions.push(func);
                 } else {
@@ -387,8 +380,9 @@ impl RmlNode {
                 
                 // if we are here, it's not a property; try to parse a child node
                 if content.peek(Ident) {
-                    let child: RmlNode = RmlNode::parse_with_flag(&content, pre_parse)?;
+                    let mut child: RmlNode = RmlNode::parse_with_flag(&content, pre_parse)?;
                     functions.extend(child.functions.clone());
+                    child.functions.clear();
                     children.push(child);
                 } else {
                     return Err(content.error("Unexpected token"));
@@ -425,6 +419,7 @@ impl RmlNode {
             // For custom components, we expand them by generating the component's node
             // and applying the properties passed to the component
             let cmp = self.generate_custom_component_with_counter(
+                components,
                 component_def,
                 id_counter,
                 properties_mapping,
@@ -434,6 +429,9 @@ impl RmlNode {
                 ancestor_is_repeater,);
             return cmp;
         }
+        else {
+            println!("NOT FOUND node type: {} {:?}", node_type_str, components);
+        }
 
         let node_type = match node_type_str.as_str() {
             "Node" => ItemTypeEnum::Node,
@@ -442,6 +440,7 @@ impl RmlNode {
             "MouseArea" => ItemTypeEnum::MouseArea,
             "Texture" => ItemTypeEnum::Texture,
             "Repeater" => ItemTypeEnum::Repeater,
+            "Column" => ItemTypeEnum::Column,
             _ => panic!("Unknown node type: {}", node_type_str),
         };
         
@@ -749,6 +748,9 @@ impl RmlNode {
             .functions
             .iter()
             .map(|f| {
+
+                println!("Function : {:#?}", f.sig.ident.clone());
+
                 let f_name = f.sig.ident.clone();
                 let f_inputs = f.sig.inputs.clone();
                 let f_output = f.sig.output.clone();
@@ -952,26 +954,18 @@ impl RmlNode {
                 HashMap::new(),
             ).unwrap();
 
-            // create geometry properties for all nodes
-            let x_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
-            engine.add_property_to_node(#temp_node, "x".to_string(), x_prop);
-            let y_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
-            engine.add_property_to_node(#temp_node, "y".to_string(), y_prop);
-            let width_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
-            engine.add_property_to_node(#temp_node, "width".to_string(), width_prop);
-            let height_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
-            engine.add_property_to_node(#temp_node, "height".to_string(), height_prop);
-
-            let computed_x_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
-            engine.add_property_to_node(#temp_node, "computed_x".to_string(), computed_x_prop);
-            let computed_y_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
-            engine.add_property_to_node(#temp_node, "computed_y".to_string(), computed_y_prop);
-            let computed_width_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
-            engine.add_property_to_node(#temp_node, "computed_width".to_string(), computed_width_prop);
-            let computed_height_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
-            engine.add_property_to_node(#temp_node, "computed_height".to_string(), computed_height_prop);
-            let anchors_prop = engine.add_property(Property::new(AbstractValue::String("".to_string())));
-            engine.add_property_to_node(#temp_node, "anchors".to_string(), anchors_prop);
+            // create default properties for all nodes
+            engine.create_property(#temp_node, "node_name".to_string(), AbstractValue::String(#node_type_str.to_string()));
+            engine.create_property(#temp_node, "x".to_string(), AbstractValue::Number(0.0));
+            engine.create_property(#temp_node, "y".to_string(), AbstractValue::Number(0.0));
+            engine.create_property(#temp_node, "width".to_string(), AbstractValue::Number(0.0));
+            engine.create_property(#temp_node, "height".to_string(), AbstractValue::Number(0.0));
+            engine.create_property(#temp_node, "computed_x".to_string(), AbstractValue::Number(0.0));
+            engine.create_property(#temp_node, "computed_y".to_string(), AbstractValue::Number(0.0));
+            engine.create_property(#temp_node, "computed_width".to_string(), AbstractValue::Number(0.0));
+            engine.create_property(#temp_node, "computed_height".to_string(), AbstractValue::Number(0.0));
+            engine.create_property(#temp_node, "anchors".to_string(), AbstractValue::String("".to_string()));
+            engine.create_property(#temp_node, "visible".to_string(), AbstractValue::Bool(true));
 
             #(#properties)*
 
@@ -985,7 +979,8 @@ impl RmlNode {
     }
 
     fn generate_custom_component_with_counter(
-        &mut self, 
+        &mut self,
+        parent_components: &HashMap<String, ComponentDefinition>,
         component_def: &ComponentDefinition,
         id_counter: &mut u32,
         properties_mapping: &HashMap<String, AbstractValue>,
@@ -1038,7 +1033,7 @@ impl RmlNode {
           RmlParser::parse_with_path(input, component_def.path.clone(), false)
         }, tokens.clone()).unwrap();
 
-        let (mut component_node, components) = (res.root_node, res.components);
+        let (mut component_node, mut components) = (res.root_node, res.components);
 
         // Override the component's properties with the ones passed to this instance
         for (prop_type, prop_key, prop_value) in &self.properties {
@@ -1053,6 +1048,7 @@ impl RmlNode {
         
         // Add children from this instance to the component
         component_node.children.extend(self.children.clone());
+        components.extend(parent_components.clone());
         
         // Generate the component with the applied properties
         let component_gen_res = component_node.generate_with_components_and_counter(
@@ -1105,7 +1101,7 @@ impl RmlNode {
         if let Some(component_def) = components.get(&node_type_str) {
             // For custom components, we expand them by generating the component's node
             // and applying the properties passed to the component
-            let cmp = self.pre_generate_custom_component_with_counter(component_def, id_counter);
+            let cmp = self.pre_generate_custom_component_with_counter(components, component_def, id_counter);
             return cmp;
         }
         
@@ -1195,6 +1191,9 @@ impl RmlNode {
 
         properties.extend(merged_child_results);
 
+        if properties.get(&format!("{}.node_name", id)).is_none() {
+            properties.insert(format!("{}.{}", id, "node_name"), AbstractValue::String("".to_string()));
+        }
         if properties.get(&format!("{}.x", id)).is_none() {
             properties.insert(format!("{}.{}", id, "x"), AbstractValue::Number(0.0));
         }
@@ -1222,11 +1221,14 @@ impl RmlNode {
         if properties.get(&format!("{}.anchors", id)).is_none() {
             properties.insert(format!("{}.{}", id, "anchors"), AbstractValue::String("".to_string()));
         }
+        if properties.get(&format!("{}.visible", id)).is_none() {
+            properties.insert(format!("{}.{}", id, "visible"), AbstractValue::Bool(false));
+        }
 
         (properties, node_hierachy)
     }
     
-    fn pre_generate_custom_component_with_counter(&self, component_def: &ComponentDefinition, id_counter: &mut u32) -> 
+    fn pre_generate_custom_component_with_counter(&self, parent_components: &HashMap<String, ComponentDefinition>, component_def: &ComponentDefinition, id_counter: &mut u32) -> 
         (HashMap<String, AbstractValue>, Vec<(String, Vec<String>)>)
     {
         // Read and parse the component file
@@ -1244,10 +1246,12 @@ impl RmlNode {
             }
         };
 
-        let (mut component_node, components) = (res.root_node, res.components);
+        let (mut component_node, mut components) = (res.root_node, res.components);
 
         // remove id property if exist
         component_node.properties.retain(|(_, k, _)| k.to_string() != "id".to_string());
+
+        components.extend(parent_components.clone());
 
         // Override the component's properties with the ones passed to this instance
         for (prop_type, prop_key, prop_value) in &self.properties {

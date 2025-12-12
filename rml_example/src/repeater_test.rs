@@ -37,11 +37,6 @@ async fn main() {
                 font: "liberation"
 
                 on_click: {
-                    let count = $.root.children_count as u32;
-                    for i in 0 .. count {
-                        $.this.childrens[i].text = format!("new Item {}", i);
-                    }
-
                     $.root.childrens[0].text = format!("Clicked !");
                 }
             }
@@ -76,14 +71,6 @@ async fn main() {
 
                         $.this.text = format!("Clicked ! {}", $.this.index);
                         $.root.childrens[0].text = format!("TESTOFTHEDEVIL Clicked ! {}", $.this.index);
-                        // TODO find a way to access $.root.childrens[0] in repeater childs
-                        // the problem is that the $.root.childrens is made at the compile time
-                        // so when the repeater instantiate the childrens,
-                        // $.root.childrens is already replaced by the repeater childrens ids,
-                        
-                        // and when we derive the ids, we have lost the information that it's a $.root.childrens access
-
-                        // we should maybe use a similar approch to dollar_this and dollar_parent
                         $.repeater_example.childrens[0].text = format!("Clicked ! {}", $.this.index);
                     }
                 }

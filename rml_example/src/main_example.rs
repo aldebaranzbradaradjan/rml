@@ -135,6 +135,27 @@ async fn main() {
                     }
                 }
             }
+
+            UI::Column {
+                id: column
+                anchors: bottom | left
+
+                UI::Button {
+                    number counter: 0
+                    number top_margin: 0
+                    text: { format!("Counter: {}", $.this.counter) }
+                    on_click: { $.this.counter += 1.0; println!("Clicked ! {}", $.this.counter); }
+                    font: "liberation"
+                }
+
+                UI::Button {
+                    number counter: 0
+                    number top_margin: 0
+                    text: { format!("Counter: {}", $.this.counter) }
+                    on_click: { $.this.counter += 1.0; }
+                    font: "liberation"
+                }
+            }
         }
     );
 

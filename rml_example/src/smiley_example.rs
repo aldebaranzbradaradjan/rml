@@ -29,7 +29,7 @@ pub fn create_smiley_ui() -> RmlEngine {
             color color: { GRAY }
 
             on_ready: {
-                emit!( engine, sad_btn, click ); 
+                emit(&mut engine, "sad_btn", "click" ); 
             }
             
             // Title

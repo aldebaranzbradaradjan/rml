@@ -24,6 +24,7 @@ pub enum ItemTypeEnum {
     MouseArea,
     Texture,
     Repeater,
+    Column,
 }
 
 pub type ArenaNodeId = String;
@@ -71,6 +72,7 @@ impl ToTokens for ItemTypeEnum {
             ItemTypeEnum::MouseArea => quote! { ItemTypeEnum::MouseArea },
             ItemTypeEnum::Texture => quote! { ItemTypeEnum::Texture },
             ItemTypeEnum::Repeater => quote! { ItemTypeEnum::Repeater },
+            ItemTypeEnum::Column => quote! { ItemTypeEnum::Column },
         };
         tokenized.to_tokens(tokens);
     }

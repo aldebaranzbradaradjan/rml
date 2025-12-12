@@ -99,6 +99,45 @@ impl Geometry {
             height: engine.get_number_property_of_node(node_id, "height", 0.0),
         };
 
+        // if the node is a column, we need to compute the geometry of its childrens, a children rec that contain all the children of the column
+        if let Some(node) = engine.get_node_by_id(node_id) {
+            if node.node_type == ItemTypeEnum::Column {
+                let children_ids = engine.get_children_str_ids_by_id(node_id).unwrap_or_default();
+                
+                let mut min_x = f32::MAX;
+                let mut min_y = f32::MAX;
+                let mut max_x = 0.0;
+                let mut max_y = 0.0;
+
+                for child_id in &children_ids {
+                    // get computed width, height, x, and y of the child
+                    let child_x = engine.get_number_property_of_node(child_id, "computed_x", 0.0);
+                    let child_y = engine.get_number_property_of_node(child_id, "computed_y", 0.0);
+                    let child_width = engine.get_number_property_of_node(child_id, "computed_width", 0.0);
+                    let child_height = engine.get_number_property_of_node(child_id, "computed_height", 0.0);
+                
+                    if child_x < min_x {
+                        min_x = child_x;
+                    }
+                    if child_y < min_y {
+                        min_y = child_y;
+                    }
+                    if child_x + child_width > max_x {
+                        max_x = child_x + child_width;
+                    }
+                    if child_y + child_height > max_y {
+                        max_y = child_y + child_height;
+                    }
+                }
+
+                geometry.x = min_x;
+                geometry.y = min_y;
+                geometry.width = max_x - min_x;
+                geometry.height = max_y - min_y;
+
+            }
+        }
+
         // if the node is a text, and don't have a width or height, we need to measure its size
         if let Some(node) = engine.get_node_by_id(node_id) {
             if node.node_type == ItemTypeEnum::Text {

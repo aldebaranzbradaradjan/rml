@@ -1,6 +1,6 @@
 import "." as Components
 
-Node {
+Column {
     on_ready: {
         let count = $.this.children_count as u32;
         let mut y = 0.0;
@@ -8,7 +8,8 @@ Node {
         for i in 0 .. count {
             $.this.childrens[i].anchors = "horizontal_center__top".to_string();
             $.this.childrens[i].top_margin = y;
-            y += 60.;
+            y += $.this.childrens[i].height + 10.0;
+            println!("$: {}", $.this.childrens[i].height);
         }
     }
 }

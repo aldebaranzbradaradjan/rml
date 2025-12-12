@@ -7,12 +7,6 @@ fn window_conf() -> Conf {
         window_title: "RML Example".to_owned(),
         window_width: 500,
         window_height: 500,
-        window_resizable: true,
-        fullscreen: false,
-        platform: miniquad::conf::Platform {
-            linux_backend: miniquad::conf::LinuxBackend::WaylandOnly,
-            ..Default::default()
-        },
         ..Default::default()
     }
 }
@@ -39,12 +33,9 @@ async fn main() {
             Components::Column {
                 id: column
                 anchors: center
-                width: { $.parent.width / 2.0 }
-                height: { $.parent.height / 2.0 }
 
                 Components::Button {
                     number counter: 0
-                    //anchors: horizontal_center | top
                     number top_margin: 0
                     text: { format!("Counter: {}", $.this.counter) }
                     on_click: { $.this.counter += 1.0; println!("Clicked ! {}", $.this.counter); }
@@ -53,7 +44,6 @@ async fn main() {
 
                 Components::Button {
                     number counter: 0
-                    //anchors: horizontal_center | top
                     number top_margin: 0
                     text: { format!("Counter: {}", $.this.counter) }
                     on_click: { $.this.counter += 1.0; }
@@ -62,20 +52,15 @@ async fn main() {
             }
         }
     );
-
     
-    let font = load_ttf_font("./LiberationSerif-Regular.ttf")
-        .await
-        .unwrap();
+    let font = load_ttf_font("./LiberationSerif-Regular.ttf").await.unwrap();
     engine.add_font("liberation".to_string(), font);
 
     let texture = load_texture("./Adriaen_van_Ostade_006.png").await.unwrap();
     engine.add_texture("Adriaen".to_string(), texture);
 
-
     loop {
         engine.process_events();
-        clear_background(BLACK);
         rml_core::draw::draw_root(&mut engine);
         next_frame().await
     }

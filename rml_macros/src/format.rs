@@ -136,68 +136,39 @@ pub fn transform_dollar_syntax(
 
     println!("result: {}", result);
 
-    //let children_pattern = Regex::new( r"\$\.\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\.childrens\[\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\]\s*\.\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([^;]+);").unwrap();
     let children_pattern = Regex::new(r"(?sx)
-        \$\.\s*([A-Za-z_][A-Za-z0-9_]*)       # capture node id (ex: column)
-        \s*\.\s*childrens\s*                 # literal .childrens  (allow whitespace around)
-        \[\s*([A-Za-z_][A-Za-z0-9_]*)\s*\]   # capture index (ex: i)
-        \s*\.\s*([A-Za-z_][A-Za-z0-9_]*)     # capture property (ex: top_margin)
-        \s*=\s*                              # assignment with optional spaces/newlines
-        (.+?)                                # capture value (non-greedy, DOTALL allows newlines)
-        \s*;                                 # semicolon terminator
-    ").unwrap();
+        \$\.\s*([A-Za-z_][A-Za-z0-9_]*)        # node id
+        \s*\.\s*childrens\s*
+        \[\s*([A-Za-z_][A-Za-z0-9_]*)\s*\]     # index
+        \s*\.\s*([A-Za-z_][A-Za-z0-9_]*)       # property
+        \s*(=|\+=|-=|\*=|/=)\s*                # operator
+        (.+?)                                  # value
+        \s*;
+    ")
+    .unwrap();
     result = children_pattern.replace_all(&result, |caps: &regex::Captures| {
-        //print
         let node_id = &caps[1];
         let index = &caps[2];
         let property = &caps[3];
-        let value = &caps[4];
-
-        // ok, i'm so dumb, but here i can't just replace $.node.childrens[i].prop with $.an_id.prop
-        // because, i depend of the runtime execution...
-
-        // so i have to find the id of the child at index i, but at runtime.
-        // i can do that, but then i need to know the prop type...
-        // but to know that i need to find it in the properties_mapping at compile time
-        // a bit disapointing.
-
-        // ok, thinking nasty, i could resurrect the $.this.childrens[i].top_margin:number = y; notation
-        // but i don't want to do that
-
-        // or think even nastier, i could just replace the whole bloc with a :
-        /*
-        
-            if i == 0 {
-                $.this.childrens[0].top_margin = y;
-            }
-            else if i == 1 {
-                $.this.childrens[1].top_margin = y;
-            }
-            ...
-            else {
-                $.this.childrens[150].top_margin = y;
-            }
-
-            where 151 is the number of children
-        
-         */
-
-        // let's go (not pretty pround of it, but it works)
+        let operator = &caps[4];    // NEW
+        let value = &caps[5];
 
         let code = node_hierarchy_map
             .iter()
             .find(|(curr_id, _)| curr_id == node_id)
             .map(|(_, v)| {
-                v.iter().enumerate()  
+                v.iter().enumerate()
                     .map(|(idx, child_id)| {
-                        match properties_mapping.get(&format!("{}.{}", child_id, property)) {
-                            Some(_) => { format!("if {index} == {idx} {{ $.{child_id}.{property} = {value}; }}") },
+                        let mapped_prop = format!("{}.{}", child_id, property);
+                        match properties_mapping.get(&mapped_prop) {
+                            Some(_) => {
+                                format!("if {index} == {idx} {{ $.{child_id}.{property} {operator} {value}; }}")
+                            }
                             None => {
-                                println!("property {} not found", format!("{}.{}", child_id, property));
+                                println!("property {} not found", mapped_prop);
                                 "".to_string()
                             }
-                        } 
-                        
+                        }
                     })
                     .collect::<Vec<_>>()
                     .join("\n")
@@ -205,7 +176,94 @@ pub fn transform_dollar_syntax(
             .unwrap();
 
         code
+    }).to_string();
 
+    let children_value_pattern = Regex::new(r"(?sx)
+        ([A-Za-z_][A-Za-z0-9_]*)          # variable on the left (caps[1])
+        \s*(=|\+=|-=|\*=|/=)\s*           # operator (caps[2])
+        \$\.\s*([A-Za-z_][A-Za-z0-9_]*)   # node id (caps[3])
+        \s*\.\s*childrens\s*
+        \[\s*([A-Za-z_][A-Za-z0-9_]*)\s*\]  # index: ident or number (caps[4])
+        \s*\.\s*([A-Za-z_][A-Za-z0-9_]*)  # property (caps[5])
+        \s*;
+    ").unwrap();
+    result = children_value_pattern.replace_all(&result, |caps: &regex::Captures| {
+        let left_var = &caps[1];
+        let operator = &caps[2];
+        let node_id = &caps[3];
+        let index = &caps[4];
+        let property = &caps[5];
+
+        let code = node_hierarchy_map
+            .iter()
+            .find(|(curr_id, _)| curr_id == node_id)
+            .map(|(_, v)| {
+                v.iter().enumerate()
+                    .map(|(idx, child_id)| {
+                        let mapped_prop = format!("{}.{}", child_id, property);
+                        match properties_mapping.get(&mapped_prop) {
+                            Some(_) => {
+                                format!("if {index} == {idx} {{ {left_var} {operator} $.{child_id}.{property}; }}")
+                            }
+                            None => {
+                                println!("property {} not found", mapped_prop);
+                                "".to_string()
+                            }
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
+            .unwrap();
+
+        code
+    }).to_string();
+
+    let children_value_pattern = Regex::new(r"(?sx)
+        \$\.\s*([A-Za-z_][A-Za-z0-9_]*)      # node id (caps[1])
+        \s*\.\s*childrens\s*
+        \[\s*([A-Za-z_][A-Za-z0-9_]*)\s*\]   # index (caps[2])
+        \s*\.\s*([A-Za-z_][A-Za-z0-9_]*)     # property (caps[3])
+    ").unwrap();
+    result = children_value_pattern.replace_all(&result, |caps: &regex::Captures| {
+        let node_id = &caps[1];
+        let index   = &caps[2];
+        let property = &caps[3];
+
+
+        let code = node_hierarchy_map
+            .iter()
+            .find(|(curr_id, _)| curr_id == node_id)
+            .map(|(_, v)| {
+                let mut parts = Vec::new();
+                for (idx, child_id) in v.iter().enumerate() {
+                    let mapped_prop = format!("{}.{}", child_id, property);
+                    if !properties_mapping.contains_key(&mapped_prop) {
+                        println!("property {} not found", mapped_prop);
+                        continue;
+                    }
+                    let cond = if idx == 0 {
+                        format!("if {index} == {idx} {{ $.{child_id}.{property} }}")
+                    } else {
+                        format!("else if {index} == {idx} {{ $.{child_id}.{property} }}")
+                    };
+
+                    parts.push(cond);
+                }
+
+                // cas final : else { $.last_child.prop }
+                if let Some(last_child) = v.last() {
+                    parts.push(format!("else {{ $.{last_child}.{property} }}"));
+                }
+
+                format!("{{ {} }}", parts.join(" "))
+
+            })
+            .unwrap();
+
+            println!("code: {}", code);
+
+        code
     }).to_string();
 
     // $.repeater_example.childrens[0].text must be translated to childrens[0] id .text (ex if first child of repeater is test01 : test01.text)
@@ -232,8 +290,6 @@ pub fn transform_dollar_syntax(
             .1
             .get(index.parse::<usize>().unwrap())
             .unwrap();
-
-        println!("$.{}.{}", child_id, property);
 
         format!("$.{}.{}", child_id, property)
 
