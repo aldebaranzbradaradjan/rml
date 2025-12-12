@@ -655,7 +655,7 @@ impl RmlNode {
                             // find the property on wich depend the callback, we will need to analyze the block code
                             // and compare the property names in the block with the property names in the engine
                             // get block in string
-                            //let block_string = format!("{}", quote! { #block });
+                            let block_string = format!("{}", quote! { #block });
                             let related_property = find_related_property_for_binding(id.clone(), k_string, block_string);
                             // Generate the binding calls
                             let binding_calls: Vec<proc_macro2::TokenStream> = related_property.iter().map(|(node, prop)| {
@@ -970,6 +970,8 @@ impl RmlNode {
             engine.add_property_to_node(#temp_node, "computed_width".to_string(), computed_width_prop);
             let computed_height_prop = engine.add_property(Property::new(AbstractValue::Number(0.0)));
             engine.add_property_to_node(#temp_node, "computed_height".to_string(), computed_height_prop);
+            let anchors_prop = engine.add_property(Property::new(AbstractValue::String("".to_string())));
+            engine.add_property_to_node(#temp_node, "anchors".to_string(), anchors_prop);
 
             #(#properties)*
 
@@ -1216,6 +1218,9 @@ impl RmlNode {
         }
         if properties.get(&format!("{}.computed_height", id)).is_none() {
             properties.insert(format!("{}.{}", id, "computed_height"), AbstractValue::Number(0.0));
+        }
+        if properties.get(&format!("{}.anchors", id)).is_none() {
+            properties.insert(format!("{}.{}", id, "anchors"), AbstractValue::String("".to_string()));
         }
 
         (properties, node_hierachy)

@@ -44,7 +44,7 @@ async fn main() {
 
                 Components::Button {
                     number counter: 0
-                    anchors: horizontal_center | top
+                    //anchors: horizontal_center | top
                     number top_margin: 0
                     text: { format!("Counter: {}", $.this.counter) }
                     on_click: { $.this.counter += 1.0; println!("Clicked ! {}", $.this.counter); }
@@ -53,9 +53,9 @@ async fn main() {
 
                 Components::Button {
                     number counter: 0
-                    anchors: horizontal_center | top
+                    //anchors: horizontal_center | top
                     number top_margin: 0
-                    text: { println!("hgjj"); format!("Counter: {}", $.this.counter) }
+                    text: { format!("Counter: {}", $.this.counter) }
                     on_click: { $.this.counter += 1.0; }
                     font: "liberation"
                 }

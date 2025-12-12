@@ -24,21 +24,6 @@ pub fn rml(input: TokenStream) -> TokenStream {
         Err(_e) => RmlParser::empty(),
     };
 
-    // let res = syn::parse::Parser::parse(|input: ParseStream| {
-    //     RmlParser::parse_with_path(input, "".to_string(), true)
-    // }, input.clone()).unwrap_or(RmlParser::empty());
-
-    //let input_clone = input.clone();
-
-    // let res = syn::parse::Parser::parse(|input: ParseStream| {
-    //     let result = RmlParser::parse_with_path(input, "".to_string(), true)?;
-    //     eprintln!("Parsing succeeded! Empty: {}", input.is_empty());
-    //     Ok(result)
-    // }, input).unwrap_or_else(|e| {
-    //     eprintln!("Parse failed: {}", e);
-    //     RmlParser::empty()
-    // });
-
     println!("Res : {:#?}", res);
 
     // now we need equivalent process to parsed_node.generate_with_components(&components);
