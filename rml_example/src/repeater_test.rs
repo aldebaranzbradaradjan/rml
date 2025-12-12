@@ -30,11 +30,26 @@ async fn main() {
 
             color color: { DARKGRAY }
 
+            UI::Button {
+                anchors: center | bottom
+                margins: 50
+                text: "Increment!"
+                font: "liberation"
+
+                on_click: {
+                    let count = $.root.children_count as u32;
+                    for i in 0 .. count {
+                        $.this.childrens[i].text = format!("new Item {}", i);
+                    }
+
+                    $.root.childrens[0].text = format!("Clicked !");
+                }
+            }
+
             Repeater {
                 id: repeater_example
 
                 number item_count: 3
-                anchors: fill
 
                 on_ready: {
                     let count = $.this.item_count as u32;
@@ -49,10 +64,27 @@ async fn main() {
                     font: "liberation"
                     y: { $.this.index as f32 * 60.0 + 0.0 }
                     x: { $.this.index as f32 * 60.0 + 0.0 }
+                    
                     on_click: {
-                        println!("Runtime generated button clicked!");
-                        println!("Parent count: {}", $.parent.item_count);
+                        println!("Runtime generated button {} clicked!", $.this.id);
+                        println!("Test {}", $.repeater_example.childrens[0].id);
+                        println!("Parent items count: {}", $.parent.item_count);
                         println!("This button index: {}", $.this.index);
+                        println!("Parent child count: {}", $.parent.children_count);
+                        println!("This child count: {}", $.this.children_count);
+                        println!("Root child count: {}", $.root.children_count);
+
+                        $.this.text = format!("Clicked ! {}", $.this.index);
+                        $.root.childrens[0].text = format!("TESTOFTHEDEVIL Clicked ! {}", $.this.index);
+                        // TODO find a way to access $.root.childrens[0] in repeater childs
+                        // the problem is that the $.root.childrens is made at the compile time
+                        // so when the repeater instantiate the childrens,
+                        // $.root.childrens is already replaced by the repeater childrens ids,
+                        
+                        // and when we derive the ids, we have lost the information that it's a $.root.childrens access
+
+                        // we should maybe use a similar approch to dollar_this and dollar_parent
+                        $.repeater_example.childrens[0].text = format!("Clicked ! {}", $.this.index);
                     }
                 }
 

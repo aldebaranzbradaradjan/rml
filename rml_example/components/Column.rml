@@ -1,25 +1,20 @@
+import "." as Components
 
 Node {
-    on_ready: { initItems(); }
-
-    fn initItems() {
-        if $.this.children_count == 0.0 { return; }
+    on_ready: {
+        let count = $.this.children_count as u32;
+        // count == 0 { return; }
         let mut y = 0.0;
 
-        for i in 0 .. $.this.children_count as u32 {
-            $.this.children[i].anchors = horizontal_center | top;
-            $.this.children[i].top_margin = y;
-            if i > 0 {
-                y = $.this.children[i].computed_y;
-            }
+        for i in 0 .. count {
+            //$.this.childrens[i].anchors = "horizontal_center__top";
+            $.this.childrens[i].top_margin = y;
+            y += 60.;//$.this.childrens[i].computed_height;
         }
+
     }
 
     // todo
-    // to make it works, we need to be able to acces children_count and children array from RML
-    // so we need to convert this notation in a similar way as $.node.prop
-    // $.this.children_count can be a normal property that is setted when items are added (or deleted)
-    // but $.this.children[i].prop need to be translated to a function that will get or set the child at index i property
-    // also, we could generate binding to re-evaluate property when a binding is detected in the value
+    // we could generate binding to re-evaluate property when a binding is detected in the value
     // like qml Qt.binding : $.this.children[i].top_margin = Rml.binding(fn() { return $.this.children[i].computed_y; })
 }

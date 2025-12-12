@@ -36,13 +36,29 @@ async fn main() {
                 keep_aspect_ratio: true
             }
 
-            Components::Button {
-                id: counter_btn
+            Components::Column {
+                id: column
                 anchors: center
-                number counter: 0
-                text: { format!("Counter: {}", $.counter_btn.counter) }
-                on_click: { $.counter_btn.counter += 1.0; }
-                font: "liberation"
+                width: { $.parent.width / 2.0 }
+                height: { $.parent.height / 2.0 }
+
+                Components::Button {
+                    number counter: 0
+                    anchors: horizontal_center | top
+                    number top_margin: 0
+                    text: { format!("Counter: {}", $.this.counter) }
+                    on_click: { $.this.counter += 1.0; println!("Clicked ! {}", $.this.counter); }
+                    font: "liberation"
+                }
+
+                Components::Button {
+                    number counter: 0
+                    anchors: horizontal_center | top
+                    number top_margin: 0
+                    text: { println!("hgjj"); format!("Counter: {}", $.this.counter) }
+                    on_click: { $.this.counter += 1.0; }
+                    font: "liberation"
+                }
             }
         }
     );

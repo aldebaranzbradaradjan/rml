@@ -3,22 +3,27 @@ use std::{
     process::{Command, Stdio},
 };
 
+use regex::Regex;
+
 use rml_core::{AbstractValue};
 
-pub fn generate_id_replacement_map(code: &str) -> Vec<String> {
-    use regex::Regex;
-    let mut replacement_map = Vec::new();
+pub fn collect_children<'a>(
+    node_hierarchy: &'a Vec<(String, Vec<String>)>,
+    id: &'a str,
+    out: &mut Vec<&'a str>,
+) {
+    // find the node and its children
+    let children = node_hierarchy
+        .iter()
+        .find(|(curr_id, _)| curr_id == id)
+        .map(|(_, v)| v)
+        .unwrap();
 
-    let id_pattern = Regex::new(r"generated_id_(\d+)").unwrap();
-
-    for cap in id_pattern.captures_iter(code) {
-        let original_id = cap.get(0).unwrap().as_str().to_string();
-        if !replacement_map.contains(&original_id) {
-            replacement_map.push(original_id);
-        }
+    // iterate over the childrens
+    for child in children {
+        out.push(child.as_str());
+        collect_children(node_hierarchy, child, out); // recurse
     }
-
-    replacement_map
 }
 
 pub fn format_code_for_binding_extraction(code: &str) -> String {
@@ -66,24 +71,47 @@ pub fn format_code(code: &str) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
+// pub fn extract_dollar_children_syntax(block_string: String) -> Vec<(String, u32)> {
+//     // dollar_ nodeidstr _children_ index _ property
+//     let mut children = Vec::new();
+//     let children_pattern = Regex::new(r"dollar_(\w+)_children_(\d+)_(\w+)").unwrap();
+//     for cap in children_pattern.captures_iter(&block_string) {
+//         let node_id = &cap[1];
+//         let index = &cap[2];
+//         let _property = &cap[3];
+//         children.push((node_id.to_string(), index.parse::<u32>().unwrap()));
+//     }
+//     children
+// }
+
 pub fn transform_dollar_this_parent_syntax(
     this_id: &str,
     parent_id: &str,
     code: &str,
     properties_mapping: &HashMap<String, AbstractValue>,
+    node_hierarchy_map: &Vec<(String, Vec<String>)>,
 ) -> String {
+
+    //println!("transform_dollar_this_parent_syntax");
+
+    if code.contains("dollar_this") || code.contains("dollar_parent") {
+        println!("transform_dollar_this_parent_syntax: code contains $.this or $.parent");
+    }
+
     // replace $.this and $.parent with dollar_this and dollar_parent
     let code = code
         .replace("dollar_this", &format!("$.{}", this_id))
         .replace("dollar_parent", &format!("$.{}", parent_id));
-    transform_dollar_syntax(&code, properties_mapping)
+    transform_dollar_syntax(&code, properties_mapping, node_hierarchy_map)
 }
 
 pub fn transform_dollar_syntax(
     code: &str,
     properties_mapping: &HashMap<String, AbstractValue>,
+    node_hierarchy_map: &Vec<(String, Vec<String>)>,
 ) -> String {
-    use regex::Regex;
+
+    println!("transform_dollar_syntax");
 
     // Only transform if there are actually $ expressions
     if !code.contains("$.") {
@@ -93,8 +121,132 @@ pub fn transform_dollar_syntax(
     // replace $.this and $.parent with dollar_this and dollar_parent
     let code = code
         .replace("$.this", "dollar_this")
-        .replace("$.parent", "dollar_parent");
-    let mut result = code.to_string();
+        .replace("$.parent", "dollar_parent")
+        .replace("childrens [", "childrens[");
+    let mut result = code.trim().to_string();
+
+    // Handle $.node.children_count and $.node.children[i].prop first
+    // $.node.children_count is get only
+    let children_count_pattern =
+        Regex::new(r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.children_count\b").unwrap();
+    result = children_count_pattern.replace_all(&result, |caps: &regex::Captures| {
+        let node_id = &caps[1];
+        format!("engine.get_children_count_by_id(\"{}\")", node_id)
+    }).to_string();
+
+    println!("result: {}", result);
+
+    let children_pattern = Regex::new( r"\$\.\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\.childrens\[\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\]\s*\.\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([^;]+);").unwrap();
+    result = children_pattern.replace_all(&result, |caps: &regex::Captures| {
+        //print
+
+        let node_id = &caps[1];
+        let index = &caps[2];
+        let property = &caps[3];
+        let value = &caps[4];
+
+        println!("pattern match !!!! $.{}.childrens[{}].{}", node_id, index, property);
+
+        // ok, i'm so dumb, but here i can't just replace $.node.childrens[i].prop with $.an_id.prop
+        // because, i depend of the runtime execution...
+
+        // so i have to find the id of the child at index i, but at runtime.
+        // i can do that, but then i need to know the prop type...
+        // but to know that i need to find it in the properties_mapping at compile time
+        // a bit disapointing.
+
+        // ok, thinking nasty, i could resurrect the $.this.childrens[i].top_margin:number = y; notation
+        // but i don't want to do that
+
+        // or think even nastier, i could just replace the whole bloc with a :
+        /*
+        
+            if i == 0 {
+                $.this.childrens[0].top_margin = y;
+            }
+            else if i == 1 {
+                $.this.childrens[1].top_margin = y;
+            }
+            ...
+            else {
+                $.this.childrens[150].top_margin = y;
+            }
+
+            where 151 is the number of children
+        
+         */
+
+        // let's go
+
+        let code = node_hierarchy_map
+            .iter()
+            .find(|(curr_id, _)| curr_id == node_id)
+            .map(|(_, v)| {
+                v.iter().enumerate()  
+                    .map(|(idx, child_id)| {
+                        match properties_mapping.get(&format!("{}.{}", child_id, property)) {
+                            Some(_) => { format!("if {index} == {idx} {{ println!(\"index is {index}\"); $.{child_id}.{property} = {value}; }}") },
+                            None => {
+                                println!("property {} not found", format!("{}.{}", child_id, property));
+                                "".to_string()
+                            }
+                        } 
+                        
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
+            .unwrap();
+
+
+
+        // let out = String::new();
+
+        // for i in 0..number_of_childs {
+        //     let child_id = node_hierarchy_map
+        //         .iter()
+        //         .find(|(curr_id, _)| curr_id == node_id)
+        //         .map(|(_, v)| v[i].clone())
+        //         .unwrap();
+
+        code
+
+    }).to_string();
+
+    // $.repeater_example.childrens[0].text must be translated to childrens[0] id .text (ex if first child of repeater is test01 : test01.text)
+    // for that we need to be able to know the id of the child at an index of a node
+    // we need a node_hierarchy_map
+    let children_pattern = Regex::new(r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.childrens\[(\d+)\]\.([a-zA-Z_][a-zA-Z0-9_]*)").unwrap();
+    result = children_pattern.replace_all(&result, |caps: &regex::Captures| {
+        let node_id = &caps[1];
+        let index = &caps[2];
+        let property = &caps[3];
+
+        // find the child id from the node_hierarchy_map
+        // map item are like this: 
+        /*
+            (root, vec(repeater_example))
+            (repeater_example, vec(generated_id_0, generated_id_1, etc...))
+            etc...
+        */
+
+        println!("pattern match !!!! 2");
+
+        let child_id = node_hierarchy_map
+            .iter()
+            .find(|(parent_id, _)| parent_id == node_id)
+            .unwrap()
+            .1
+            .get(index.parse::<usize>().unwrap())
+            .unwrap();
+
+        println!("$.{}.{}", child_id, property);
+
+        format!("$.{}.{}", child_id, property)
+
+    }).to_string();
+
+    // translation to engine calls
 
     // Handle compound assignments first: $.node.prop += value; ([+\-*/])=
     let compound_assign_pattern = Regex::new(
@@ -145,6 +297,7 @@ pub fn transform_dollar_syntax(
     .unwrap();
     result = assign_pattern
         .replace_all(&result, |caps: &regex::Captures| {
+            println!("assign_pattern {}", caps.get(0).unwrap().as_str());
             let node_id = &caps[1];
             let property = &caps[2];
             let value = &caps[3].trim();
@@ -180,6 +333,7 @@ pub fn transform_dollar_syntax(
         Regex::new(r"\$\.([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\b").unwrap();
     result = dollar_pattern
         .replace_all(&result, |caps: &regex::Captures| {
+            println!("get_pattern {}", caps.get(0).unwrap().as_str());
             let node_id = &caps[1];
             let property = &caps[2];
 
@@ -211,6 +365,7 @@ pub fn transform_dollar_syntax(
     result
 }
 
+/* 
 #[cfg(test)]
 mod tests {
     use rml_core::prelude::DARKGRAY;
@@ -361,6 +516,7 @@ mod tests {
         );
     }
 }
+    */
 
 pub fn inject_engine_text_based(
     input: &str,
@@ -482,6 +638,8 @@ pub fn find_related_property_for_binding(
     property: String,
     block_string: String,
 ) -> Vec<(String, String)> {
+
+    println!("find_related_property_for_binding");
     // ex: k_string = "x", block_string =
     // "{
     // let outer_rect_width = get_number!(engine, outer_rect, width);
@@ -533,6 +691,7 @@ pub fn find_related_property_for_binding(
             || trimmed_line.contains("get_color_property_of_node")
             || trimmed_line.contains("get_property_of_node")
         {
+            println!("trimmed {trimmed_line}");
             // Parse method calls like engine.get_number_property_of_node("node_name", "property_name", default)
             if let Some(start) = trimmed_line.find('(') {
                 if let Some(end) = trimmed_line.rfind(')') {
@@ -556,5 +715,6 @@ pub fn find_related_property_for_binding(
     let mut seen = std::collections::HashSet::new();
     related_properties.retain(|item| seen.insert(item.clone()));
 
+    println!("related {related_properties:?}");
     related_properties
 }

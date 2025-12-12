@@ -45,15 +45,17 @@ pub fn rml(input: TokenStream) -> TokenStream {
     // but only to develop children components, and be sure to use a deterministic way to rename items (a global counter should do the tricks)
     // after that we could be able to map a list of property name with theirs types
     let (mut parsed_node, components) = (res.root_node, res.components);
-    let properties_mapping =
-        parsed_node.pre_generate_with_components_and_counter(&components, &mut 0);
+    let (properties_mapping, node_hierarchy) = parsed_node.pre_generate_with_components_and_counter(&components, &mut 0);
+
+    println!("Res : {:#?}", properties_mapping);
+    println!("Res : {:#?}", node_hierarchy);
 
     // println!("Res : {:#?}", properties_mapping);
     // we have the struct of the application, and can infer property type, and use it in transform_dollar_syntax
 
     // transform the input to replace $ syntax before parsing
     let input_string = input.to_string();
-    let input_string = transform_dollar_syntax(&input_string, &properties_mapping);
+    let input_string = transform_dollar_syntax(&input_string, &properties_mapping, &node_hierarchy);
 
     //println!("Transformed input: {}", input_string);
 
@@ -73,6 +75,7 @@ pub fn rml(input: TokenStream) -> TokenStream {
         &components,
         &mut 0,
         &properties_mapping,
+        &node_hierarchy,
         "",
         false,
         false,

@@ -301,6 +301,15 @@ impl RmlEngine {
         self.arena.get_node_mut(node_id)
     }
 
+    pub fn get_children_count_by_id(&self, node_id_str: &str) -> usize {
+        if let Some(node_id) = self.arena.id_to_node_id.get(node_id_str) {
+            return self.arena.get_childrens_ids(*node_id).len();
+        }
+        else {
+            0
+        }
+    }
+
     pub fn get_children(&self, node_id: NodeId) -> Vec<&ArenaNode> {
         self.arena.get_children(node_id)
     }
@@ -365,6 +374,7 @@ impl RmlEngine {
             node.add_property(name, property_id);
         }
     }
+
 
     pub fn get_property_of_node<T>(
         &self,
