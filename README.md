@@ -197,16 +197,20 @@ The parts listed below barely works for some.
 
 * Minimal implementation of Repeater ✅
 
-* Implement $.this and $.parent notations ✅
+* Implement `$.this` and `$.parent` notations ✅
 
 ## Planned Features / TODO (order by interest)
 
 * Continue Repeater (add delete items, allow the node in a repeater to be listed as children of the repeater parent)
 
-* Implement a child access system ($.this.children_count, $.this.children[i].computed_y)
+* Implement a child access system (`$.this.children_count`, `$.this.children[i].computed_y`)
+
+* Implement TextInput based on the KeyEvent system
+
+* Implement Timer (integrate in signals logic)
 
 * Add the ability to bind a property to a callback at runtime
-    Like qml Qt.binding : $.this.children[i].top_margin = Rml.binding(fn() { return $.this.margins; })
+    Like qml Qt.binding : `$.this.children[i].top_margin = Rml.binding(fn() { return $.this.margins; })`
     That will set the property and setup and register a callback that will be evaluated when the detected property changes
     Like actual callback in initializer but at runtime. All other callback related to this property must be deleted.
 
@@ -222,6 +226,8 @@ The parts listed below barely works for some.
     * This will certainly need a way to access the data in the engine context
 
 * Extend import logic (multiple imports per file, global import at root node)
+
+* Implement all tasks from : https://eugenkiss.github.io/7guis/tasks/ 
 
 * Rename to CML (Cute Markup Language) or RTML (Rustic Markup Language - Rust Toy Markup Language - Real Tiny Markup Language ? Real Time Markup Language ??)
 I'm considering renaming it to CML (Cute Markup Language) or RTML - a more playful alternative to RML, which could be misinterpreted as Rust Markup Language.
